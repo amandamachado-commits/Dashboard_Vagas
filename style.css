@@ -1,11 +1,11 @@
 :root {
-  --fundo: #F7F7FE;       /* Lilás Luz */
+  --fundo: #F7F7FE;
   --card: #FFFFFF;
-  --azul: #400FF2;        /* Azul Bemobi */
+  --azul: #400FF2;
   --lilas: #9884FF;
-  --texto: #18233C;       /* Cinza Escuro */
-  --texto2: #3D4C6F;      /* Cinza Médio */
-  --linha: #C6C5C9;       /* Cinza Claro */
+  --texto: #18233C;
+  --texto2: #3D4C6F;
+  --linha: #C6C5C9;
   --borda: #DBE1F0;
   --ok-bg: #E1F7E9;  --ok: #05643C;
   --alerta-bg: #FFEDDE; --alerta: #794604;
@@ -66,6 +66,15 @@ td { padding: 8px; border-bottom: 1px solid var(--borda); }
 .selo.ok { background: var(--ok-bg); color: var(--ok); }
 .selo.alerta { background: var(--alerta-bg); color: var(--alerta); }
 .selo.erro { background: var(--erro-bg); color: var(--erro); }
+
+.limpar {
+  align-self: end; font: inherit; font-size: 14px; color: var(--azul);
+  background: #fff; border: 1px solid var(--azul); border-radius: 8px;
+  padding: 8px 12px; cursor: pointer;
+}
+.limpar:hover { background: #ECE7FE; }
+tr.clicavel { cursor: pointer; }
+tr.clicavel:hover td { background: #F7F7FE; }
 
 .aviso { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 16px; color: var(--texto2); }
 

@@ -1,12 +1,12 @@
 // =============================================================
 //  Dashboard de vagas — roda no navegador.
 //  Só recebe da API os campos liberados (ver api/vagas.js).
-//  >>> Depois de baixar, renomeie este arquivo para app.js <<<
 // =============================================================
 
 const FILTROS = [
   ['ano', 'Ano'], ['bu', 'BU'], ['area', 'Área'],
   ['lideranca', 'Liderança'], ['recrutadora', 'Recrutadora'], ['status', 'Status'],
+  ['tipo', 'Tipo de vaga'],
 ];
 const CORES_STATUS = {
   'Fechada': '#400FF2', 'Em andamento': '#9884FF',
@@ -80,6 +80,28 @@ function montarFiltros() {
     label.appendChild(sel);
     box.appendChild(label);
   });
+
+  // Botão para limpar todos os filtros
+  const limpar = document.createElement('button');
+  limpar.type = 'button';
+  limpar.className = 'limpar';
+  limpar.textContent = 'Limpar filtros';
+  limpar.addEventListener('click', () => {
+    FILTROS.forEach(([c]) => { $('#f-' + c).value = ''; });
+    render();
+  });
+  box.appendChild(limpar);
+}
+
+// Clique num gráfico ou tabela: aplica o filtro. Clicar de novo no mesmo valor desfaz.
+function filtrarPor(campo, valor) {
+  const sel = $('#f-' + campo);
+  if (!sel) return;
+  const existe = [...sel.options].some((o) => o.value === String(valor));
+  if (!existe) return;
+  sel.value = sel.value === String(valor) ? '' : String(valor);
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 const filtrados = () =>
@@ -107,7 +129,9 @@ function desenhar(id, cfg) {
   graficos[id] = new Chart(document.getElementById(id), cfg);
 }
 
-function barras(id, pares, { horizontal = false, cores } = {}) {
+function barras(id, pares, { horizontal = false, cores, campo } = {}) {
+  const selecionado = campo ? $('#f-' + campo).value : '';
+  const corBase = (rotulo) => (cores ? cores[rotulo] || '#9884FF' : '#400FF2');
   desenhar(id, {
     type: 'bar',
     data: {
@@ -115,7 +139,9 @@ function barras(id, pares, { horizontal = false, cores } = {}) {
       datasets: [{
         label: 'Vagas',
         data: pares.map((p) => p[1]),
-        backgroundColor: cores ? pares.map((p) => cores[p[0]] || '#9884FF') : '#400FF2',
+        // barra selecionada fica destacada; as outras ficam claras
+        backgroundColor: pares.map((p) =>
+          !selecionado || String(p[0]) === selecionado ? corBase(p[0]) : '#D9CDFD'),
         borderRadius: 4,
         maxBarThickness: 32,
       }],
@@ -123,6 +149,14 @@ function barras(id, pares, { horizontal = false, cores } = {}) {
     options: {
       indexAxis: horizontal ? 'y' : 'x',
       maintainAspectRatio: false,
+      onClick: (evt, elementos, grafico) => {
+        if (!campo || !elementos.length) return;
+        const valor = grafico.data.labels[elementos[0].index];
+        setTimeout(() => filtrarPor(campo, valor), 0);
+      },
+      onHover: (evt, elementos) => {
+        evt.native.target.style.cursor = campo && elementos.length ? 'pointer' : 'default';
+      },
       scales: {
         x: { beginAtZero: true, grid: { display: horizontal }, ticks: { precision: 0 } },
         y: { beginAtZero: true, grid: { display: !horizontal }, ticks: { precision: 0 } },
@@ -182,7 +216,7 @@ function render() {
   ]);
 
   // Status
-  barras('g-status', contar(L, 'status'), { cores: CORES_STATUS });
+  barras('g-status', contar(L, 'status'), { cores: CORES_STATUS, campo: 'status' });
 
   // SLA por mês de fechamento
   const porMes = new Map();
@@ -214,10 +248,10 @@ function render() {
     },
   });
 
-  barras('g-area', contar(L, 'area'), { horizontal: true });
-  barras('g-lid', contar(L, 'lideranca').slice(0, 12), { horizontal: true });
-  barras('g-bu', contar(L, 'bu'));
-  barras('g-tipo', contar(L, 'tipo'));
+  barras('g-area', contar(L, 'area'), { horizontal: true, campo: 'area' });
+  barras('g-lid', contar(L, 'lideranca').slice(0, 12), { horizontal: true, campo: 'lideranca' });
+  barras('g-bu', contar(L, 'bu'), { campo: 'bu' });
+  barras('g-tipo', contar(L, 'tipo'), { campo: 'tipo' });
 
   // Recrutadoras
   const grupos = new Map();
@@ -237,6 +271,12 @@ function render() {
     .sort((a, b) => b[1] - a[1]);
   tabela('#t-rec', ['Recrutadora', 'Vagas', 'Em andamento', 'Fechadas', 'SLA médio (dias)', '% no prazo'],
     linhasRec, [1, 2, 3, 4, 5]);
+  // clicar numa recrutadora filtra o painel por ela
+  [...$('#t-rec').tBodies[0].rows].forEach((tr) => {
+    if (tr.cells.length < 2) return;
+    tr.classList.add('clicavel');
+    tr.addEventListener('click', () => filtrarPor('recrutadora', tr.cells[0].textContent));
+  });
 
   // Vagas em andamento
   const linhasAbertas = andamento
