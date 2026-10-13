@@ -1,11 +1,11 @@
 :root {
-  --fundo: #F7F7FE;
+  --fundo: #F7F7FE;       /* Lilás Luz */
   --card: #FFFFFF;
-  --azul: #400FF2;
+  --azul: #400FF2;        /* Azul Bemobi */
   --lilas: #9884FF;
-  --texto: #18233C;
-  --texto2: #3D4C6F;
-  --linha: #C6C5C9;
+  --texto: #18233C;       /* Cinza Escuro */
+  --texto2: #3D4C6F;      /* Cinza Médio */
+  --linha: #C6C5C9;       /* Cinza Claro */
   --borda: #DBE1F0;
   --ok-bg: #E1F7E9;  --ok: #05643C;
   --alerta-bg: #FFEDDE; --alerta: #794604;
@@ -73,8 +73,11 @@ td { padding: 8px; border-bottom: 1px solid var(--borda); }
   padding: 8px 12px; cursor: pointer;
 }
 .limpar:hover { background: #ECE7FE; }
-tr.clicavel { cursor: pointer; }
-tr.clicavel:hover td { background: #F7F7FE; }
+
+.barra-filtros { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0 8px; }
+.barra-filtros .sub { margin-top: 0; }
+.filtros.oculto { display: none; }
+.destaque-topo { margin-bottom: 16px; }
 
 .aviso { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 16px; color: var(--texto2); }
 

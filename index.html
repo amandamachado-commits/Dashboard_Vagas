@@ -21,8 +21,20 @@
   </header>
 
   <main id="conteudo">
-    <section class="filtros" id="filtros" aria-label="Filtros"></section>
+    <!-- Botão que mostra/esconde os filtros + resumo dos filtros ativos -->
+    <div class="barra-filtros">
+      <button type="button" class="limpar" id="btn-filtros" aria-expanded="false" aria-controls="filtros">Mostrar filtros</button>
+      <span class="sub" id="resumo-filtros"></span>
+    </div>
+    <section class="filtros oculto" id="filtros" aria-label="Filtros"></section>
+
     <section class="kpis" id="kpis"></section>
+
+    <!-- Vagas em andamento no topo -->
+    <div class="painel largo destaque-topo">
+      <h2>Vagas em andamento</h2>
+      <div class="tabela"><table id="t-abertas"></table></div>
+    </div>
 
     <section class="grade">
       <div class="painel"><h2>Vagas por status</h2><div class="grafico"><canvas id="g-status"></canvas></div></div>
@@ -31,8 +43,6 @@
       <div class="painel"><h2>Vagas por liderança</h2><div class="grafico"><canvas id="g-lid"></canvas></div></div>
       <div class="painel"><h2>Vagas por BU</h2><div class="grafico"><canvas id="g-bu"></canvas></div></div>
       <div class="painel"><h2>Tipo de vaga</h2><div class="grafico"><canvas id="g-tipo"></canvas></div></div>
-      <div class="painel largo"><h2>Desempenho por recrutadora</h2><div class="tabela"><table id="t-rec"></table></div></div>
-      <div class="painel largo"><h2>Vagas em andamento</h2><div class="tabela"><table id="t-abertas"></table></div></div>
     </section>
   </main>
 

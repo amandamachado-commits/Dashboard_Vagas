@@ -92,6 +92,7 @@ function montarFiltros() {
     box.appendChild(label);
   });
 
+  // Botão para limpar todos os filtros
   const limpar = document.createElement('button');
   limpar.type = 'button';
   limpar.className = 'limpar';
@@ -101,9 +102,28 @@ function montarFiltros() {
     render();
   });
   box.appendChild(limpar);
+
+  // Botão "Mostrar filtros / Ocultar filtros"
+  const btn = $('#btn-filtros');
+  btn.addEventListener('click', () => {
+    const abrir = box.classList.contains('oculto');
+    box.classList.toggle('oculto', !abrir);
+    btn.textContent = abrir ? 'Ocultar filtros' : 'Mostrar filtros';
+    btn.setAttribute('aria-expanded', String(abrir));
+  });
 }
 
-// Clique num gráfico ou tabela: aplica o filtro. Clicar de novo desfaz.
+// Texto ao lado do botão: quais filtros estão ativos
+function resumoFiltros() {
+  const ativos = FILTROS
+    .map(([c, rotulo]) => [rotulo, $('#f-' + c).value])
+    .filter(([, v]) => v);
+  $('#resumo-filtros').textContent = ativos.length
+    ? 'Filtrando por: ' + ativos.map(([r, v]) => `${r} ${v}`).join(' · ')
+    : 'Sem filtros: mostrando todas as vagas';
+}
+
+// Clique num gráfico: aplica o filtro. Clicar de novo no mesmo valor desfaz.
 function filtrarPor(campo, valor) {
   const sel = $('#f-' + campo);
   if (!sel) return;
@@ -124,7 +144,8 @@ const filtrados = (ignorar) =>
     return !v || valorDe(r, c) === v;
   }));
 
-// Filtros em cascata: cada lista mostra só o que existe com os outros filtros
+// Filtros em cascata: cada lista mostra só as opções que existem
+// com os outros filtros escolhidos, com a quantidade de vagas.
 function atualizarOpcoes() {
   FILTROS.forEach(([campo]) => {
     const sel = $('#f-' + campo);
@@ -134,8 +155,15 @@ function atualizarOpcoes() {
       const v = valorDe(r, campo);
       if (v) cont.set(v, (cont.get(v) || 0) + 1);
     });
-    if (atual && !cont.has(atual)) cont.set(atual, 0);
-    const valores = [...cont.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    if (atual && !cont.has(atual)) cont.set(atual, 0); // mantém a escolha atual
+    const valores = [...cont.keys()].sort((a, b) => {
+      // no filtro Status, "Em andamento" vem sempre primeiro
+      if (campo === 'status') {
+        if (a === 'Em andamento') return -1;
+        if (b === 'Em andamento') return 1;
+      }
+      return a.localeCompare(b, 'pt-BR', { numeric: true });
+    });
     sel.replaceChildren(new Option('Todos', ''));
     valores.forEach((v) => sel.add(new Option(`${v} (${cont.get(v)})`, v)));
     sel.value = atual;
@@ -174,6 +202,7 @@ function barras(id, pares, { horizontal = false, cores, campo } = {}) {
       datasets: [{
         label: 'Vagas',
         data: pares.map((p) => p[1]),
+        // barra selecionada fica destacada; as outras ficam claras
         backgroundColor: pares.map((p) =>
           !selecionado || String(p[0]) === selecionado ? corBase(p[0]) : '#D9CDFD'),
         borderRadius: 4,
@@ -233,6 +262,7 @@ function tabela(sel, cabecalho, linhas, numericas = []) {
 
 function render() {
   atualizarOpcoes();
+  resumoFiltros();
   const L = filtrados();
   const ativos = FILTROS.filter(([c]) => $('#f-' + c).value).length;
   $('#atualizado').dataset.base ??= $('#atualizado').textContent;
@@ -253,15 +283,33 @@ function render() {
     ['Fechadas', fmt(fechadas.length), ''],
     ['Congeladas · Canceladas',
       `${L.filter((r) => r.status === 'Congelada').length} · ${L.filter((r) => r.status === 'Cancelada').length}`, ''],
-        ['SLA médio', slas.length ? fmt(media(slas)) + ' dias' : '—',
+    ['SLA médio', slas.length ? fmt(media(slas)) + ' dias' : '—',
       slas.length ? `${slas.length} vagas fechadas` : 'só vagas fechadas têm SLA', true],
     ['Fechadas no prazo', prazo.pct == null ? '—' : fmt(prazo.pct) + '%', `${prazo.ok} de ${prazo.total}`, true],
     ['Tempo médio em aberto', emAberto.length ? fmt(media(emAberto)) + ' dias' : '—',
       emAberto.length ? `${emAberto.length} vagas em andamento` : 'nenhuma vaga em andamento', true],
   ]);
 
+  // Vagas em andamento (tabela do topo)
+  const linhasAbertas = andamento
+    .map((r) => ({ r, d: diasEmAberto(r) }))
+    .sort((a, b) => (b.d ?? -1) - (a.d ?? -1))
+    .map(({ r, d }) => {
+      let situacao = '—';
+      if (d != null && r.prazo) {
+        if (d > r.prazo) situacao = { classe: 'erro', texto: 'Acima do prazo' };
+        else if (d >= r.prazo - 5) situacao = { classe: 'alerta', texto: 'Em risco' };
+        else situacao = { classe: 'ok', texto: 'No prazo' };
+      }
+      return [r.vaga, r.area, r.lideranca, r.recrutadora, dataBR(r.abertura), d ?? '—', r.prazo ?? '—', situacao];
+    });
+  tabela('#t-abertas', ['Vaga', 'Área', 'Liderança', 'Recrutadora', 'Abertura', 'Dias em aberto', 'Prazo', 'Situação'],
+    linhasAbertas, [5, 6]);
+
+  // Status
   barras('g-status', contar(L, 'status'), { cores: CORES_STATUS, campo: 'status' });
 
+  // SLA por mês de fechamento
   const porMes = new Map();
   fechadas.forEach((r) => {
     if (r.sla == null || !r.fechamento) return;
@@ -295,44 +343,6 @@ function render() {
   barras('g-lid', contar(L, 'lideranca').slice(0, 12), { horizontal: true, campo: 'lideranca' });
   barras('g-bu', contar(L, 'bu'), { campo: 'bu' });
   barras('g-tipo', contar(L, 'tipo'), { campo: 'tipo' });
-
-  const grupos = new Map();
-  L.forEach((r) => {
-    const k = r.recrutadora || 'Não informado';
-    if (!grupos.has(k)) grupos.set(k, []);
-    grupos.get(k).push(r);
-  });
-  const linhasRec = [...grupos.entries()]
-    .map(([nome, rs]) => {
-      const f = rs.filter((r) => r.status === 'Fechada');
-      const s = f.map((r) => r.sla).filter((v) => v != null);
-      const p = noPrazo(f);
-      return [nome, rs.length, rs.filter((r) => r.status === 'Em andamento').length, f.length,
-        s.length ? fmt(media(s)) : '—', p.pct == null ? '—' : fmt(p.pct) + '%'];
-    })
-    .sort((a, b) => b[1] - a[1]);
-  tabela('#t-rec', ['Recrutadora', 'Vagas', 'Em andamento', 'Fechadas', 'SLA médio (dias)', '% no prazo'],
-    linhasRec, [1, 2, 3, 4, 5]);
-  [...$('#t-rec').tBodies[0].rows].forEach((tr) => {
-    if (tr.cells.length < 2) return;
-    tr.classList.add('clicavel');
-    tr.addEventListener('click', () => filtrarPor('recrutadora', tr.cells[0].textContent));
-  });
-
-  const linhasAbertas = andamento
-    .map((r) => ({ r, d: diasEmAberto(r) }))
-    .sort((a, b) => (b.d ?? -1) - (a.d ?? -1))
-    .map(({ r, d }) => {
-      let situacao = '—';
-      if (d != null && r.prazo) {
-        if (d > r.prazo) situacao = { classe: 'erro', texto: 'Acima do prazo' };
-        else if (d >= r.prazo - 5) situacao = { classe: 'alerta', texto: 'Em risco' };
-        else situacao = { classe: 'ok', texto: 'No prazo' };
-      }
-      return [r.vaga, r.area, r.lideranca, r.recrutadora, dataBR(r.abertura), d ?? '—', r.prazo ?? '—', situacao];
-    });
-  tabela('#t-abertas', ['Vaga', 'Área', 'Liderança', 'Recrutadora', 'Abertura', 'Dias em aberto', 'Prazo', 'Situação'],
-    linhasAbertas, [5, 6]);
 }
 
 iniciar();

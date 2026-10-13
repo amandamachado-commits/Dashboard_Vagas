@@ -8,12 +8,14 @@
 
 const SHEET_ID = process.env.SHEET_ID;
 
+// "gid" = número que aparece no fim do link da aba (…#gid=123456)
 const ABAS = [
   { ano: 2024, nome: 'Controle de Vagas 2024', gid: process.env.GID_2024 },
   { ano: 2025, nome: ' Controle de Vagas 2025', gid: process.env.GID_2025 },
   { ano: 2026, nome: 'Controle de Vagas 2026', gid: process.env.GID_2026 },
 ];
 
+// LISTA BRANCA — só estes campos saem do servidor.
 const CAMPOS_LIBERADOS = {
   vaga:         { cabecalho: 'VAGA',                     desvio: -1 },
   status:       { cabecalho: 'STATUS DA VAGA',           desvio: 0 },
@@ -165,11 +167,13 @@ async function lerAba(aba) {
         else r[campo] = bruto;
       }
       r.status = padronizarStatus(r.status);
+      // SLA vazio? calcula: fechamento - abertura - dias congelada
       if (r.sla == null && r.abertura && r.fechamento) {
         r.sla = Math.max(0, diasEntre(r.abertura, r.fechamento) - (r.congelamento || 0));
       }
       r.prazoSituacao = situacaoPrazo(r.statusPrazo);
-      if (!r.prazoSituacao && r.status === 'Fechada' && r.sla != null && r.prazo) {
+      // Vaga fechada: no prazo = SLA menor ou igual ao prazo (mesma regra da planilha)
+      if (r.status === 'Fechada' && r.sla != null && r.prazo) {
         r.prazoSituacao = r.sla <= r.prazo ? 'Dentro do prazo' : 'Fora do prazo';
       }
       delete r.statusPrazo;

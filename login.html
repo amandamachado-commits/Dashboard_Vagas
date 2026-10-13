@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Entrar · Controle de Vagas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@300..500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .tela-login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+    .caixa-login {
+      width: 100%; max-width: 380px; background: #fff; border: 1px solid var(--borda);
+      border-radius: 16px; padding: 32px 28px;
+    }
+    .caixa-login h1 { font-size: 26px; }
+    .caixa-login form { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; }
+    .caixa-login label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--texto2); }
+    .caixa-login input {
+      font: inherit; color: var(--texto); padding: 10px 12px;
+      border: 1px solid var(--borda); border-radius: 8px; background: #fff;
+    }
+    .caixa-login input:focus { outline: 2px solid var(--azul); outline-offset: 1px; }
+    .caixa-login button {
+      font: inherit; font-weight: 500; color: #fff; background: var(--azul);
+      border: 0; border-radius: 8px; padding: 12px; cursor: pointer; margin-top: 4px;
+    }
+    .caixa-login button:disabled { opacity: .6; cursor: wait; }
+    .erro-login { color: var(--erro); font-size: 14px; min-height: 1.2em; margin: 0; }
+  </style>
+</head>
+<body>
+  <main class="tela-login">
+    <div class="caixa-login">
+      <h1>Controle de Vagas</h1>
+      <div class="sub">Agenda Edu · Gente e Gestão</div>
+      <form id="form-login">
+        <label>Usuário
+          <input id="usuario" name="usuario" autocomplete="username" required autofocus>
+        </label>
+        <label>Senha
+          <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="erro-login" id="erro" role="alert"></p>
+        <button type="submit" id="entrar">Entrar</button>
+      </form>
+    </div>
+  </main>
+  <script>
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const botao = document.getElementById('entrar');
+      const erro = document.getElementById('erro');
+      botao.disabled = true; erro.textContent = '';
+      try {
+        const resp = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            usuario: document.getElementById('usuario').value.trim(),
+            senha: document.getElementById('senha').value,
+          }),
+        });
+        if (resp.ok) { location.href = '/'; return; }
+        const j = await resp.json().catch(() => ({}));
+        erro.textContent = j.erro || 'Não foi possível entrar.';
+      } catch {
+        erro.textContent = 'Sem conexão. Tente de novo.';
+      }
+      botao.disabled = false;
+    });
+  </script>
+</body>
+</html>
