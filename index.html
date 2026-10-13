@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Controle de Vagas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@300..500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Controle de Vagas</h1>
+      <div class="sub">Agenda Edu · Gente e Gestão</div>
+    </div>
+    <div class="sub" id="atualizado">Carregando…</div>
+  </header>
+
+  <main id="conteudo">
+    <section class="filtros" id="filtros" aria-label="Filtros"></section>
+    <section class="kpis" id="kpis"></section>
+
+    <section class="grade">
+      <div class="painel"><h2>Vagas por status</h2><div class="grafico"><canvas id="g-status"></canvas></div></div>
+      <div class="painel"><h2>SLA médio por mês de fechamento</h2><div class="grafico"><canvas id="g-sla"></canvas></div></div>
+      <div class="painel"><h2>Vagas por área</h2><div class="grafico"><canvas id="g-area"></canvas></div></div>
+      <div class="painel"><h2>Vagas por liderança</h2><div class="grafico"><canvas id="g-lid"></canvas></div></div>
+      <div class="painel"><h2>Vagas por BU</h2><div class="grafico"><canvas id="g-bu"></canvas></div></div>
+      <div class="painel"><h2>Tipo de vaga</h2><div class="grafico"><canvas id="g-tipo"></canvas></div></div>
+      <div class="painel largo"><h2>Desempenho por recrutadora</h2><div class="tabela"><table id="t-rec"></table></div></div>
+      <div class="painel largo"><h2>Vagas em andamento</h2><div class="tabela"><table id="t-abertas"></table></div></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
