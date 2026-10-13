@@ -3,30 +3,17 @@
 //  SOMENTE os campos liberados. Nada além da lista abaixo
 //  chega ao navegador (orçamento, pessoa substituída, vaga
 //  afirmativa/PCD e código da vaga ficam de fora).
-//
-//  Versão 2:
-//  - encontra as colunas pelo NOME do cabeçalho (não quebra se
-//    alguém inserir uma coluna nova)
-//  - lê todas as linhas da aba, sem depender de começar na linha 4
-//  - calcula o SLA quando a célula estiver vazia
-//  - diagnóstico em /api/vagas?diagnostico=1 (só contagens)
+//  Diagnóstico em /api/vagas?diagnostico=1 (só contagens)
 // =============================================================
 
 const SHEET_ID = process.env.SHEET_ID;
 
-// Abas lidas. Se a aba tiver outro nome na planilha, ajuste aqui.
-// "gid" é opcional: é o número que aparece no fim do link da aba
-// (…#gid=123456). Quando preenchido, a leitura fica mais confiável.
 const ABAS = [
   { ano: 2024, nome: 'Controle de Vagas 2024', gid: process.env.GID_2024 },
   { ano: 2025, nome: ' Controle de Vagas 2025', gid: process.env.GID_2025 },
   { ano: 2026, nome: 'Controle de Vagas 2026', gid: process.env.GID_2026 },
 ];
 
-// LISTA BRANCA. "cabecalho" = nome da coluna na planilha (sem acento,
-// maiúsculo). "ultima" = quando o nome se repete, usa a última coluna.
-// "desvio" = posição em relação à coluna STATUS DA VAGA, usada se o
-// cabeçalho não for encontrado.
 const CAMPOS_LIBERADOS = {
   vaga:         { cabecalho: 'VAGA',                     desvio: -1 },
   status:       { cabecalho: 'STATUS DA VAGA',           desvio: 0 },
@@ -48,7 +35,7 @@ const CAMPOS_DATA = ['abertura', 'fechamento'];
 const CAMPOS_NUMERO = ['congelamento', 'prazo', 'sla'];
 
 const normalizar = (s) =>
-  String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toUpperCase().replace(/\s+/g, ' ').trim();
 
 function parseCSV(texto) {
@@ -69,7 +56,6 @@ function parseCSV(texto) {
   return linhas;
 }
 
-// Aceita 20/01/2026, 1/20/2026, 2026-01-20 e 20/01/26
 function paraData(v) {
   v = (v || '').trim();
   if (!v) return null;
@@ -80,7 +66,7 @@ function paraData(v) {
   let [, a, b, ano] = m;
   if (ano.length === 2) ano = '20' + ano;
   let dia = a, mes = b;
-  if (+a <= 12 && +b > 12) { dia = b; mes = a; }                  // claramente mês/dia
+  if (+a <= 12 && +b > 12) { dia = b; mes = a; }
   else if (+a <= 12 && +b <= 12 && process.env.DATE_ORDER === 'mdy') { dia = b; mes = a; }
   return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
 }
@@ -116,17 +102,34 @@ function padronizarStatus(s) {
 
 const diasEntre = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
-async function baixarCSV({ nome, gid }) {
+// Tenta 3 jeitos de ler a aba, do mais confiável para o menos.
+async function baixarCSV(aba) {
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
-  const url = gid
-    ? `${base}/export?format=csv&gid=${encodeURIComponent(gid)}`
-    : `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(nome)}`;
-  const resp = await fetch(url, { redirect: 'follow' });
-  const tipo = resp.headers.get('content-type') || '';
-  if (!resp.ok || !tipo.includes('csv')) {
-    throw new Error(`Não foi possível ler a aba "${nome.trim()}" (a planilha está compartilhada por link?)`);
+  const gid = String(aba.gid || '').replace(/\D/g, '');
+  const tentativas = [];
+  if (gid) {
+    tentativas.push(['export por gid', `${base}/export?format=csv&gid=${gid}`]);
+    tentativas.push(['gviz por gid', `${base}/gviz/tq?tqx=out:csv&headers=0&gid=${gid}`]);
   }
-  return parseCSV(await resp.text());
+  tentativas.push(['nome da aba', `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(aba.nome)}`]);
+
+  const falhas = [];
+  for (const [modo, url] of tentativas) {
+    try {
+      const resp = await fetch(url, { redirect: 'follow' });
+      const tipo = resp.headers.get('content-type') || '';
+      if (resp.ok && tipo.includes('csv')) {
+        aba.leitura = modo;
+        return parseCSV(await resp.text());
+      }
+      falhas.push(`${modo}: HTTP ${resp.status}`);
+    } catch (e) {
+      falhas.push(`${modo}: ${e.message}`);
+    }
+  }
+  throw new Error(
+    `Não foi possível ler a aba "${aba.nome.trim()}" (${falhas.join(' · ')}). ` +
+    'Confira se o SHEET_ID e o GID são da mesma planilha e se ela está compartilhada por link.');
 }
 
 function mapearColunas(cabecalho) {
@@ -162,12 +165,10 @@ async function lerAba(aba) {
         else r[campo] = bruto;
       }
       r.status = padronizarStatus(r.status);
-      // SLA vazio? calcula: fechamento - abertura - dias congelada
       if (r.sla == null && r.abertura && r.fechamento) {
         r.sla = Math.max(0, diasEntre(r.abertura, r.fechamento) - (r.congelamento || 0));
       }
       r.prazoSituacao = situacaoPrazo(r.statusPrazo);
-      // Fechada sem status de prazo preenchido? compara SLA x prazo
       if (!r.prazoSituacao && r.status === 'Fechada' && r.sla != null && r.prazo) {
         r.prazoSituacao = r.sla <= r.prazo ? 'Dentro do prazo' : 'Fora do prazo';
       }
@@ -190,7 +191,6 @@ export default async function handler(req, res) {
     const resultados = await Promise.all(ABAS.map(lerAba));
 
     if (diagnostico) {
-      // Só contagens e nomes de coluna — nenhum dado de pessoa.
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json(resultados.map((r, i) => {
         const porStatus = {};
@@ -199,7 +199,8 @@ export default async function handler(req, res) {
         for (const [campo, idx] of Object.entries(r.mapa)) colunas[campo] = r.cabecalho[idx] ?? '(não encontrada)';
         return {
           aba: ABAS[i].nome.trim(),
-          leitura: ABAS[i].gid ? 'gid' : 'nome da aba',
+          leitura: ABAS[i].leitura,
+          planilha: '…' + SHEET_ID.slice(-6),
           linhasLidas: r.linhasLidas,
           linhaDoCabecalho: r.linhaCabecalho,
           vagasValidas: r.vagas.length,
