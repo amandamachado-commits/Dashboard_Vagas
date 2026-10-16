@@ -12,19 +12,19 @@
 //  Diagnóstico (só contagens): /api/turnover?diagnostico=1
 // =============================================================
 
-// ---------- PLANILHA (use a planilha BASE, sem dados pessoais) ----------
+// ---------- PLANILHA ----------
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
 const PLANILHA_TURNOVER = {
-  id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',
-  gidDesligamentos: '0',
-  gidIndicadores: '',
+  id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',        // ID da planilha
+  gidDesligamentos: '0',                                     // aba de desligamentos
+  gidIndicadores:'123456789',      // 👉 número da aba Indicadores
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
 const SHEET_ID = process.env.SHEET_ID_TURNOVER || (vazio(PLANILHA_TURNOVER.id) ? '' : PLANILHA_TURNOVER.id);
 const GID_DESLIG = process.env.GID_DESLIGAMENTOS || (vazio(PLANILHA_TURNOVER.gidDesligamentos) ? '' : PLANILHA_TURNOVER.gidDesligamentos);
 const GID_IND = process.env.GID_INDICADORES || (vazio(PLANILHA_TURNOVER.gidIndicadores) ? '' : PLANILHA_TURNOVER.gidIndicadores);
 
-// LISTA BRANCA — únicas colunas lidas (nomes aceitos, sem acento, maiúsculo)
+// LISTA BRANCA — únicas colunas usadas (nomes aceitos, sem acento, maiúsculo)
 const CAMPOS_DESLIG = {
   data:     ['DT DESLIGAMENTO', 'DT DE DESLIGAMENTO', 'DATA DESLIGAMENTO', 'DATA DE DESLIGAMENTO',
              'DATA DO DESLIGAMENTO', 'DESLIGAMENTO', 'DT SAIDA', 'DT DE SAIDA', 'DATA DE SAIDA'],
@@ -42,10 +42,10 @@ const CAMPOS_IND = {
 
 const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho',
   'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-const ABREV = NOMES_MES.map((m) => m.normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 3).toUpperCase());
+const ABREV = NOMES_MES.map((m) => m.normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 3).toUpperCase());
 
 const normalizar = (s) =>
-  String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toUpperCase().replace(/\s+/g, ' ').trim();
 
 function parseCSV(texto) {
@@ -118,11 +118,13 @@ function padronizarTipo(s) {
   return 'Outro';
 }
 
-// Texto curto e padronizado (motivo é categoria, não texto livre)
+// Motivo como categoria curta (não texto livre)
 const categoria = (s) => {
   const t = String(s || '').trim().replace(/\s+/g, ' ');
   if (!t) return 'Não informado';
-  return t.length > 40 ? t.slice(0, 40) + '…' : t.charAt(0).toUpperCase() + t.slice(1);
+  // "Baixa Performance" e "Baixa performance" viram a mesma categoria
+  const p = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  return p.length > 40 ? p.slice(0, 40) + '…' : p;
 };
 
 async function baixarCSV(gid, rotulo) {
@@ -148,7 +150,7 @@ function mapear(linhas, campos, campoChave) {
   const mapa = {};
   for (const [campo, aceitos] of Object.entries(campos)) {
     let idx = -1;
-    for (const nome of aceitos) { idx = nomes.indexOf(nome); if (idx >= 0) break; } // respeita a ordem de preferência
+    for (const nome of aceitos) { idx = nomes.indexOf(nome); if (idx >= 0) break; }
     mapa[campo] = idx;
   }
   return { iCab, mapa, cabecalho: linhas[iCab] };
@@ -156,7 +158,7 @@ function mapear(linhas, campos, campoChave) {
 
 const pegar = (col, i) => (i >= 0 ? (col[i] ?? '').trim() : '');
 
-// ---------- leitura (com cache de 60s para não sobrecarregar o Google) ----------
+// ---------- leitura (cache de 60s) ----------
 let cache = { quando: 0, dados: null };
 
 async function lerTudo() {
@@ -213,7 +215,6 @@ function calcular({ deslig, ind, mI }, { time, ano, mes }) {
   const noPeriodo = (m) => (!ano || m.startsWith(ano)) && (!mes || Number(m.slice(5, 7)) === Number(mes));
   const D = deslig.filter((r) => noPeriodo(r.mes) && (!time || r.time === time));
 
-  // Indicadores: se tiver coluna de time, filtra; se não tiver e há filtro de time, não dá para calcular
   const indTemTime = mI && mI.mapa.time >= 0;
   const usarInd = !(time && !indTemTime);
   const I = usarInd ? ind.filter((r) => noPeriodo(r.mes) && (!time || r.time === time)) : [];
