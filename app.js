@@ -82,11 +82,14 @@ async function iniciar() {
 function montarFiltros() {
   const box = $('#filtros');
   FILTROS.forEach(([campo, rotulo]) => {
+    const valores = [...new Set(dados.map((r) => r[campo]).filter((v) => v !== '' && v != null))]
+      .sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }));
     const label = document.createElement('label');
     label.textContent = rotulo;
     const sel = document.createElement('select');
     sel.id = 'f-' + campo;
     sel.add(new Option('Todos', ''));
+    valores.forEach((v) => sel.add(new Option(v, v)));
     sel.addEventListener('change', render);
     label.appendChild(sel);
     box.appendChild(label);
@@ -123,7 +126,7 @@ function resumoFiltros() {
     : 'Sem filtros: mostrando todas as vagas';
 }
 
-// Clique num gráfico: aplica o filtro. Clicar de novo no mesmo valor desfaz.
+// Clique num gráfico ou tabela: aplica o filtro. Clicar de novo no mesmo valor desfaz.
 function filtrarPor(campo, valor) {
   const sel = $('#f-' + campo);
   if (!sel) return;
@@ -269,7 +272,6 @@ function render() {
   $('#atualizado').textContent = ativos
     ? `Mostrando ${L.length} de ${dados.length} vagas · ${$('#atualizado').dataset.base}`
     : $('#atualizado').dataset.base;
-
   const fechadas = L.filter((r) => r.status === 'Fechada');
   const andamento = L.filter((r) => r.status === 'Em andamento');
   const slas = fechadas.map((r) => r.sla).filter((v) => v != null);
@@ -289,22 +291,6 @@ function render() {
     ['Tempo médio em aberto', emAberto.length ? fmt(media(emAberto)) + ' dias' : '—',
       emAberto.length ? `${emAberto.length} vagas em andamento` : 'nenhuma vaga em andamento', true],
   ]);
-
-  // Vagas em andamento (tabela do topo)
-  const linhasAbertas = andamento
-    .map((r) => ({ r, d: diasEmAberto(r) }))
-    .sort((a, b) => (b.d ?? -1) - (a.d ?? -1))
-    .map(({ r, d }) => {
-      let situacao = '—';
-      if (d != null && r.prazo) {
-        if (d > r.prazo) situacao = { classe: 'erro', texto: 'Acima do prazo' };
-        else if (d >= r.prazo - 5) situacao = { classe: 'alerta', texto: 'Em risco' };
-        else situacao = { classe: 'ok', texto: 'No prazo' };
-      }
-      return [r.vaga, r.area, r.lideranca, r.recrutadora, dataBR(r.abertura), d ?? '—', r.prazo ?? '—', situacao];
-    });
-  tabela('#t-abertas', ['Vaga', 'Área', 'Liderança', 'Recrutadora', 'Abertura', 'Dias em aberto', 'Prazo', 'Situação'],
-    linhasAbertas, [5, 6]);
 
   // Status
   barras('g-status', contar(L, 'status'), { cores: CORES_STATUS, campo: 'status' });
@@ -343,6 +329,22 @@ function render() {
   barras('g-lid', contar(L, 'lideranca').slice(0, 12), { horizontal: true, campo: 'lideranca' });
   barras('g-bu', contar(L, 'bu'), { campo: 'bu' });
   barras('g-tipo', contar(L, 'tipo'), { campo: 'tipo' });
+
+  // Vagas em andamento
+  const linhasAbertas = andamento
+    .map((r) => ({ r, d: diasEmAberto(r) }))
+    .sort((a, b) => (b.d ?? -1) - (a.d ?? -1))
+    .map(({ r, d }) => {
+      let situacao = '—';
+      if (d != null && r.prazo) {
+        if (d > r.prazo) situacao = { classe: 'erro', texto: 'Acima do prazo' };
+        else if (d >= r.prazo - 5) situacao = { classe: 'alerta', texto: 'Em risco' };
+        else situacao = { classe: 'ok', texto: 'No prazo' };
+      }
+      return [r.vaga, r.area, r.lideranca, r.recrutadora, dataBR(r.abertura), d ?? '—', r.prazo ?? '—', situacao];
+    });
+  tabela('#t-abertas', ['Vaga', 'Área', 'Liderança', 'Recrutadora', 'Abertura', 'Dias em aberto', 'Prazo', 'Situação'],
+    linhasAbertas, [5, 6]);
 }
 
 iniciar();

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>Controle de Vagas</title>
+  <title>Dashboards · Gente e Gestão</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@300..500&display=swap" rel="stylesheet">
@@ -14,23 +14,28 @@
 <body>
   <header>
     <div>
-      <h1>Controle de Vagas</h1>
-      <div class="sub">Agenda Edu · Gente e Gestão</div>
+      <h1>Dashboards de Gente e Gestão</h1>
+      <div class="sub">Agenda Edu</div>
     </div>
-    <div class="sub" id="atualizado">Carregando…</div>
   </header>
 
+  <!-- Abas -->
+  <nav class="abas" role="tablist" aria-label="Dashboards">
+    <button type="button" class="aba ativa" data-aba="vagas" role="tab" aria-selected="true">Controle de Vagas</button>
+    <button type="button" class="aba" data-aba="turnover" role="tab" aria-selected="false">Turnover</button>
+  </nav>
+
+  <!-- ===================== ABA: CONTROLE DE VAGAS ===================== -->
   <main id="conteudo">
-    <!-- Botão que mostra/esconde os filtros + resumo dos filtros ativos -->
     <div class="barra-filtros">
       <button type="button" class="limpar" id="btn-filtros" aria-expanded="false" aria-controls="filtros">Mostrar filtros</button>
       <span class="sub" id="resumo-filtros"></span>
+      <span class="sub direita" id="atualizado">Carregando…</span>
     </div>
     <section class="filtros oculto" id="filtros" aria-label="Filtros"></section>
 
     <section class="kpis" id="kpis"></section>
 
-    <!-- Vagas em andamento no topo -->
     <div class="painel largo destaque-topo">
       <h2>Vagas em andamento</h2>
       <div class="tabela"><table id="t-abertas"></table></div>
@@ -46,6 +51,34 @@
     </section>
   </main>
 
+  <!-- ===================== ABA: TURNOVER ===================== -->
+  <main id="turnover" hidden>
+    <div class="t-topo">
+      <h2 class="t-titulo">Turnover geral · AE</h2>
+      <div class="t-filtros">
+        <label>Times <select id="tf-time"><option value="">Todos</option></select></label>
+        <label>Ano <select id="tf-ano"><option value="">Todos</option></select></label>
+        <label>Mês <select id="tf-mes"><option value="">Todos</option></select></label>
+      </div>
+    </div>
+    <p class="sub" id="t-atualizado">Carregando…</p>
+
+    <div id="t-corpo">
+      <section class="kpis kpis-5" id="t-kpis"></section>
+      <p class="aviso" id="t-vazio" hidden>Nenhum desligamento para os filtros escolhidos.</p>
+
+      <section class="t-grade">
+        <div class="painel t-tipo"><h2>Tipo de desligamento</h2><div class="grafico"><canvas id="tg-tipo"></canvas></div></div>
+        <div class="painel t-estado"><h2>% dos desligamentos por estado</h2><div class="grafico"><canvas id="tg-estado"></canvas></div></div>
+        <div class="painel t-mes"><h2>Contratações x desligamentos por mês</h2><div class="grafico grafico-alto"><canvas id="tg-mes"></canvas></div></div>
+        <div class="painel t-motivo"><h2>Motivo do desligamento</h2><div class="grafico"><canvas id="tg-motivo"></canvas></div></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.3.1/dist/chartjs-chart-treemap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="/app.js"></script>
+  <script src="/turnover.js"></script>
 </body>
 </html>

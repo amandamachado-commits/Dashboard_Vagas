@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
   const { usuario: u = '', senha: s = '' } = await lerCorpo(req);
   if (!iguais(u, usuario) || !iguais(s, senha)) {
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 800)); // freia tentativas repetidas
     return res.status(401).json({ erro: 'Usuário ou senha incorretos.' });
   }
 

@@ -3,19 +3,30 @@
 //  SOMENTE os campos liberados. Nada além da lista abaixo
 //  chega ao navegador (orçamento, pessoa substituída, vaga
 //  afirmativa/PCD e código da vaga ficam de fora).
-//  Diagnóstico em /api/vagas?diagnostico=1 (só contagens)
+//
+//  Versão 2:
+//  - encontra as colunas pelo NOME do cabeçalho (não quebra se
+//    alguém inserir uma coluna nova)
+//  - lê todas as linhas da aba, sem depender de começar na linha 4
+//  - calcula o SLA quando a célula estiver vazia
+//  - diagnóstico em /api/vagas?diagnostico=1 (só contagens)
 // =============================================================
 
 const SHEET_ID = process.env.SHEET_ID;
 
-// "gid" = número que aparece no fim do link da aba (…#gid=123456)
+// Abas lidas. Se a aba tiver outro nome na planilha, ajuste aqui.
+// "gid" é opcional: é o número que aparece no fim do link da aba
+// (…#gid=123456). Quando preenchido, a leitura fica mais confiável.
 const ABAS = [
   { ano: 2024, nome: 'Controle de Vagas 2024', gid: process.env.GID_2024 },
   { ano: 2025, nome: ' Controle de Vagas 2025', gid: process.env.GID_2025 },
   { ano: 2026, nome: 'Controle de Vagas 2026', gid: process.env.GID_2026 },
 ];
 
-// LISTA BRANCA — só estes campos saem do servidor.
+// LISTA BRANCA. "cabecalho" = nome da coluna na planilha (sem acento,
+// maiúsculo). "ultima" = quando o nome se repete, usa a última coluna.
+// "desvio" = posição em relação à coluna STATUS DA VAGA, usada se o
+// cabeçalho não for encontrado.
 const CAMPOS_LIBERADOS = {
   vaga:         { cabecalho: 'VAGA',                     desvio: -1 },
   status:       { cabecalho: 'STATUS DA VAGA',           desvio: 0 },
@@ -58,6 +69,7 @@ function parseCSV(texto) {
   return linhas;
 }
 
+// Aceita 20/01/2026, 1/20/2026, 2026-01-20 e 20/01/26
 function paraData(v) {
   v = (v || '').trim();
   if (!v) return null;
@@ -68,7 +80,7 @@ function paraData(v) {
   let [, a, b, ano] = m;
   if (ano.length === 2) ano = '20' + ano;
   let dia = a, mes = b;
-  if (+a <= 12 && +b > 12) { dia = b; mes = a; }
+  if (+a <= 12 && +b > 12) { dia = b; mes = a; }                  // claramente mês/dia
   else if (+a <= 12 && +b <= 12 && process.env.DATE_ORDER === 'mdy') { dia = b; mes = a; }
   return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
 }
@@ -107,7 +119,7 @@ const diasEntre = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 // Tenta 3 jeitos de ler a aba, do mais confiável para o menos.
 async function baixarCSV(aba) {
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
-  const gid = String(aba.gid || '').replace(/\D/g, '');
+  const gid = String(aba.gid || '').replace(/\D/g, ''); // aceita só números
   const tentativas = [];
   if (gid) {
     tentativas.push(['export por gid', `${base}/export?format=csv&gid=${gid}`]);
@@ -195,6 +207,7 @@ export default async function handler(req, res) {
     const resultados = await Promise.all(ABAS.map(lerAba));
 
     if (diagnostico) {
+      // Só contagens e nomes de coluna — nenhum dado de pessoa.
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json(resultados.map((r, i) => {
         const porStatus = {};

@@ -73,15 +73,55 @@ td { padding: 8px; border-bottom: 1px solid var(--borda); }
   padding: 8px 12px; cursor: pointer;
 }
 .limpar:hover { background: #ECE7FE; }
+tr.clicavel { cursor: pointer; }
+tr.clicavel:hover td { background: #F7F7FE; }
 
 .barra-filtros { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0 8px; }
 .barra-filtros .sub { margin-top: 0; }
 .filtros.oculto { display: none; }
 .destaque-topo { margin-bottom: 16px; }
 
+.barra-filtros .direita { margin-left: auto; }
+
+/* Abas */
+.abas {
+  max-width: 1400px; margin: 8px auto 0; padding: 0 32px;
+  display: flex; gap: 4px; border-bottom: 1px solid var(--borda);
+}
+.aba {
+  font: inherit; font-size: 15px; color: var(--texto2); background: none;
+  border: 0; border-bottom: 3px solid transparent; padding: 10px 16px; cursor: pointer;
+}
+.aba:hover { color: var(--texto); }
+.aba.ativa { color: var(--azul); border-bottom-color: var(--azul); font-weight: 500; }
+main[hidden] { display: none; }
+
 .aviso { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 16px; color: var(--texto2); }
 
 @media (max-width: 860px) {
   .grade { grid-template-columns: 1fr; }
-  header, main { padding-left: 16px; padding-right: 16px; }
+  header, main, .abas { padding-left: 16px; padding-right: 16px; }
+}
+
+/* ---------- Aba Turnover ---------- */
+.t-topo { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
+.t-titulo { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; margin: 0; color: var(--texto); }
+.t-filtros { display: flex; gap: 12px; flex-wrap: wrap; }
+.t-filtros label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--texto2); min-width: 150px; }
+#t-atualizado { margin: 8px 0 16px; }
+.kpis-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.kpi-turnover { text-align: center; }
+.kpi-turnover .valor { font-size: 36px; }
+.t-grade {
+  display: grid; gap: 16px;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  grid-template-areas: "tipo estado mes" "motivo motivo mes";
+}
+.t-tipo { grid-area: tipo; } .t-estado { grid-area: estado; }
+.t-mes { grid-area: mes; } .t-motivo { grid-area: motivo; }
+.t-mes .grafico-alto { height: calc(100% - 36px); min-height: 560px; }
+@media (max-width: 1100px) {
+  .kpis-5 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .t-grade { grid-template-columns: 1fr; grid-template-areas: "tipo" "estado" "mes" "motivo"; }
+  .t-mes .grafico-alto { min-height: 320px; }
 }
