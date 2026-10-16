@@ -15,9 +15,9 @@
 // ---------- PLANILHA (use a planilha BASE, sem dados pessoais) ----------
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
 const PLANILHA_TURNOVER = {
-  id: 'COLE_AQUI_O_ID_DA_PLANILHA',                          // 👉 ID da planilha
-  gidDesligamentos: 'COLE_AQUI_O_GID_DA_ABA_DESLIGAMENTOS',  // 👉 gid da aba de desligamentos
-  gidIndicadores: '',                                        // 👉 gid da aba Indicadores (contratações e headcount)
+  id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',
+  gidDesligamentos: '0',
+  gidIndicadores: '',
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
 const SHEET_ID = process.env.SHEET_ID_TURNOVER || (vazio(PLANILHA_TURNOVER.id) ? '' : PLANILHA_TURNOVER.id);
