@@ -12,22 +12,23 @@
 //  Diagnóstico (só contagens): /api/turnover?diagnostico=1
 // =============================================================
 
-// ---------- PLANILHA ----------
+// ---------- PLANILHA (use a planilha BASE, sem dados pessoais) ----------
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
 const PLANILHA_TURNOVER = {
   id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',        // ID da planilha
   gidDesligamentos: '0',                                     // aba de desligamentos
-  gidIndicadores:'123456789',      // 👉 número da aba Indicadores
+  gidIndicadores: '',                                        // opcional: só se quiser informar os números à mão
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
 const SHEET_ID = process.env.SHEET_ID_TURNOVER || (vazio(PLANILHA_TURNOVER.id) ? '' : PLANILHA_TURNOVER.id);
 const GID_DESLIG = process.env.GID_DESLIGAMENTOS || (vazio(PLANILHA_TURNOVER.gidDesligamentos) ? '' : PLANILHA_TURNOVER.gidDesligamentos);
 const GID_IND = process.env.GID_INDICADORES || (vazio(PLANILHA_TURNOVER.gidIndicadores) ? '' : PLANILHA_TURNOVER.gidIndicadores);
 
-// LISTA BRANCA — únicas colunas usadas (nomes aceitos, sem acento, maiúsculo)
+// LISTA BRANCA — únicas colunas lidas (nomes aceitos, sem acento, maiúsculo)
 const CAMPOS_DESLIG = {
   data:     ['DT DESLIGAMENTO', 'DT DE DESLIGAMENTO', 'DATA DESLIGAMENTO', 'DATA DE DESLIGAMENTO',
              'DATA DO DESLIGAMENTO', 'DESLIGAMENTO', 'DT SAIDA', 'DT DE SAIDA', 'DATA DE SAIDA'],
+  admissao: ['DT ADMISSAO', 'DT DE ADMISSAO', 'DATA DE ADMISSAO', 'DATA ADMISSAO', 'ADMISSAO'],
   time:     ['SETOR', 'TIME', 'AREA'],
   estado:   ['ESTADO', 'UF'],
   tipo:     ['TIPO DO DESLIGAMENTO', 'TIPO DE DESLIGAMENTO', 'TIPO DESLIGAMENTO'],
@@ -71,7 +72,20 @@ function paraData(v) {
   if (!v) return null;
   let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  // número de série do Google/Excel (ex.: 46023 = 01/01/2026)
+  if (/^\d{5}(\.\d+)?$/.test(v)) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(+v) * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+  // "15 de jan. de 2026", "15-jan-2026", "15/janeiro/2026"
+  const t = normalizar(v);
+  m = t.match(/^(\d{1,2})[\s\/.-]*(?:DE\s+)?([A-Z]{3})[A-Z]*\.?[\s\/.-]*(?:DE\s+)?(\d{2,4})/);
+  if (m && ABREV.includes(m[2])) {
+    const ano = m[3].length === 2 ? '20' + m[3] : m[3];
+    return `${ano}-${String(ABREV.indexOf(m[2]) + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  }
+  // "15/01/2026", "15.01.2026", "15-01-2026"
+  m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
   if (!m) return null;
   let [, a, b, ano] = m;
   if (ano.length === 2) ano = '20' + ano;
@@ -118,7 +132,7 @@ function padronizarTipo(s) {
   return 'Outro';
 }
 
-// Motivo como categoria curta (não texto livre)
+// Texto curto e padronizado (motivo é categoria, não texto livre)
 const categoria = (s) => {
   const t = String(s || '').trim().replace(/\s+/g, ' ');
   if (!t) return 'Não informado';
@@ -150,15 +164,23 @@ function mapear(linhas, campos, campoChave) {
   const mapa = {};
   for (const [campo, aceitos] of Object.entries(campos)) {
     let idx = -1;
-    for (const nome of aceitos) { idx = nomes.indexOf(nome); if (idx >= 0) break; }
+    for (const nome of aceitos) { idx = nomes.indexOf(nome); if (idx >= 0) break; } // respeita a ordem de preferência
+    // se não achou o nome exato, procura um cabeçalho "parecido" (ex.: "DT. ADMISSÃO", "Data Admissão (dd/mm)")
+    if (idx < 0 && PARECIDO[campo]) idx = nomes.findIndex(PARECIDO[campo]);
     mapa[campo] = idx;
   }
   return { iCab, mapa, cabecalho: linhas[iCab] };
 }
 
+// Cabeçalhos "parecidos" aceitos quando o nome exato não existe
+const PARECIDO = {
+  admissao: (n) => n.includes('ADMISS') && !n.includes('TEMPO'),
+  data: (n) => n.includes('DESLIG') && (n.includes('DT') || n.includes('DATA')) && !n.includes('TIPO') && !n.includes('MOTIVO'),
+};
+
 const pegar = (col, i) => (i >= 0 ? (col[i] ?? '').trim() : '');
 
-// ---------- leitura (cache de 60s) ----------
+// ---------- leitura (com cache de 60s para não sobrecarregar o Google) ----------
 let cache = { quando: 0, dados: null };
 
 async function lerTudo() {
@@ -168,18 +190,22 @@ async function lerTudo() {
   const mD = mapear(linhasD, CAMPOS_DESLIG, 'tipo');
   if (!mD) throw new Error('Não encontrei a coluna "Tipo do desligamento" na aba de desligamentos.');
   if (mD.mapa.data < 0) throw new Error('Não encontrei a coluna com a DATA DO DESLIGAMENTO (ex.: "DT DESLIGAMENTO").');
-  const hoje = new Date();
-  const deslig = linhasD.slice(mD.iCab + 1).map((col) => {
-    const data = paraData(pegar(col, mD.mapa.data));
-    if (!data || new Date(data) > hoje) return null;
+  const hoje = new Date().toISOString().slice(0, 10);
+  // Uma linha por pessoa (ativas e desligadas). Guardamos só datas e categorias.
+  const pessoas = linhasD.slice(mD.iCab + 1).map((col) => {
+    const adm = paraData(pegar(col, mD.mapa.admissao));
+    let desl = paraData(pegar(col, mD.mapa.data));
+    if (desl && desl > hoje) desl = null; // desligamento futuro ainda não conta
+    if (!adm && !desl) return null;
     return {
-      mes: data.slice(0, 7),
+      adm, desl,
       time: pegar(col, mD.mapa.time) || 'Não informado',
       estado: pegar(col, mD.mapa.estado) || 'Não informado',
       tipo: padronizarTipo(pegar(col, mD.mapa.tipo)),
       motivo: categoria(pegar(col, mD.mapa.motivo)),
     };
   }).filter(Boolean);
+  const deslig = pessoas.filter((p) => p.desl).map((p) => ({ ...p, mes: p.desl.slice(0, 7) }));
 
   let ind = [], mI = null;
   if (GID_IND) {
@@ -199,7 +225,10 @@ async function lerTudo() {
     }
   }
 
-  cache = { quando: Date.now(), dados: { deslig, ind, mD, mI } };
+  const exAdm = linhasD.slice(mD.iCab + 1).map((col) => pegar(col, mD.mapa.admissao)).find(Boolean) || '(vazio)';
+  const formatoAdm = exAdm.replace(/\d/g, '9');
+
+  cache = { quando: Date.now(), dados: { pessoas, deslig, ind, mD, mI, formatoAdm } };
   return cache.dados;
 }
 
@@ -211,30 +240,74 @@ const contar = (lista, campo) => {
 };
 const pct = (a, b) => (b ? Math.round((10000 * a) / b) / 100 : null);
 
-function calcular({ deslig, ind, mI }, { time, ano, mes }) {
+// Último dia do mês "2026-03" → "2026-03-31"
+const fimDoMes = (m) => {
+  const [a, mm] = m.split('-').map(Number);
+  return new Date(Date.UTC(a, mm, 0)).toISOString().slice(0, 10);
+};
+const somaMes = (m, n) => {
+  const [a, mm] = m.split('-').map(Number);
+  const d = new Date(Date.UTC(a, mm - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+};
+
+function calcular({ pessoas, deslig, ind, mI, mD }, { time, ano, mes }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mesAtual = hoje.slice(0, 7);
   const noPeriodo = (m) => (!ano || m.startsWith(ano)) && (!mes || Number(m.slice(5, 7)) === Number(mes));
-  const D = deslig.filter((r) => noPeriodo(r.mes) && (!time || r.time === time));
+  const doTime = (r) => !time || r.time === time;
 
-  const indTemTime = mI && mI.mapa.time >= 0;
-  const usarInd = !(time && !indTemTime);
-  const I = usarInd ? ind.filter((r) => noPeriodo(r.mes) && (!time || r.time === time)) : [];
+  const P = pessoas.filter(doTime);
+  const D = deslig.filter((r) => noPeriodo(r.mes) && doTime(r));
 
-  const mesesI = [...new Set(I.map((r) => r.mes))];
-  const hcPorMes = mesesI.map((m) => I.filter((r) => r.mes === m && r.headcount != null)
-    .reduce((s, r) => s + r.headcount, 0)).filter((v) => v > 0);
-  const hcMedio = hcPorMes.length ? hcPorMes.reduce((a, b) => a + b, 0) / hcPorMes.length : null;
-  const contratacoes = usarInd && ind.length ? I.reduce((s, r) => s + r.contratacoes, 0) : null;
+  // Meses do período (até o mês atual)
+  const todosMeses = [...new Set([
+    ...pessoas.filter((p) => p.adm).map((p) => p.adm.slice(0, 7)),
+    ...deslig.map((r) => r.mes),
+  ])].filter((m) => m <= mesAtual).sort();
+  // Lista contínua de meses do período, até o mês atual
+  const inicioFaixa = ano ? `${ano}-01` : todosMeses[0];
+  const fimFaixa = ano ? (`${ano}-12` < mesAtual ? `${ano}-12` : mesAtual) : mesAtual;
+  const meses = [];
+  if (inicioFaixa) for (let m = inicioFaixa; m <= fimFaixa; m = somaMes(m, 1)) if (noPeriodo(m)) meses.push(m);
 
+  // ---- Fonte 1 (preferida): aba Indicadores, se existir ----
+  const usarAba = mI && ind.length && !(time && !(mI.mapa.time >= 0));
+  // ---- Fonte 2: calculado a partir das datas de admissão/desligamento ----
+  const temAdmissao = mD && mD.mapa.admissao >= 0 && pessoas.some((p) => p.adm);
+
+  const ativosEm = (data) => P.filter((p) => p.adm && p.adm <= data && (!p.desl || p.desl > data)).length;
+  let contratacoes = null, hcMedio = null, contrPorMes = {};
+
+  if (usarAba) {
+    const I = ind.filter((r) => noPeriodo(r.mes) && doTime(r));
+    meses.forEach((m) => { contrPorMes[m] = I.filter((r) => r.mes === m).reduce((s, r) => s + r.contratacoes, 0); });
+    contratacoes = I.reduce((s, r) => s + r.contratacoes, 0);
+    const hcs = [...new Set(I.map((r) => r.mes))].map((m) => I.filter((r) => r.mes === m && r.headcount != null)
+      .reduce((s, r) => s + r.headcount, 0)).filter((v) => v > 0);
+    hcMedio = hcs.length ? hcs.reduce((a, b) => a + b, 0) / hcs.length : null;
+  } else if (temAdmissao && meses.length) {
+    meses.forEach((m) => { contrPorMes[m] = P.filter((p) => p.adm && p.adm.slice(0, 7) === m && p.adm <= hoje).length; });
+    contratacoes = Object.values(contrPorMes).reduce((a, b) => a + b, 0);
+    // Headcount médio = média entre o início do período e o fim de cada mês
+    const inicio = new Date(Date.UTC(+meses[0].slice(0, 4), +meses[0].slice(5, 7) - 1, 0)).toISOString().slice(0, 10);
+    const pontos = [ativosEm(inicio), ...meses.map((m) => ativosEm(fimDoMes(m) < hoje ? fimDoMes(m) : hoje))];
+    const validos = pontos.filter((v) => v > 0);
+    hcMedio = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null;
+  }
+
+  // Fórmulas iguais às do Power BI:
+  //  Turnover geral      = ((contratações + desligamentos) / 2) / HC
+  //  Turnover voluntário = desligamentos voluntários / HC   (antes era "14" digitado à mão; agora conta sozinho)
+  //  Retenção            = 1 − turnover voluntário
   const vol = D.filter((r) => r.tipo === 'Voluntário').length;
   const turnoverGeral = hcMedio && contratacoes != null ? pct((contratacoes + D.length) / 2, hcMedio) : null;
   const turnoverVoluntario = hcMedio ? pct(vol, hcMedio) : null;
 
-  const mesAtual = new Date().toISOString().slice(0, 7);
-  const meses = [...new Set([...D.map((r) => r.mes), ...I.map((r) => r.mes)])].filter((m) => m <= mesAtual).sort();
   const porMes = meses.map((m) => ({
     mes: m,
     desligamentos: D.filter((r) => r.mes === m).length,
-    contratacoes: usarInd && ind.length ? I.filter((r) => r.mes === m).reduce((s, r) => s + r.contratacoes, 0) : null,
+    contratacoes: contratacoes == null ? null : (contrPorMes[m] || 0),
   }));
 
   const total = D.length;
@@ -243,9 +316,12 @@ function calcular({ deslig, ind, mI }, { time, ano, mes }) {
       contratacoes,
       desligamentos: total,
       headcountMedio: hcMedio ? Math.round(hcMedio) : null,
+      ativosHoje: temAdmissao ? ativosEm(hoje) : null,
       turnoverGeral,
       turnoverVoluntario,
-      retencao: turnoverVoluntario == null ? null : Math.round((100 - turnoverVoluntario) * 100) / 100,
+      // Igual ao Power BI: Retenção = 1 − Turnover Voluntário (em branco se o voluntário for < 0% ou > 100%)
+      retencao: turnoverVoluntario == null || turnoverVoluntario < 0 || turnoverVoluntario > 100
+        ? null : Math.round((100 - turnoverVoluntario) * 100) / 100,
     },
     porTipo: contar(D, 'tipo').map(([k, n]) => [k, n, pct(n, total)]),
     porEstado: contar(D, 'estado').map(([k, n]) => [k, n, pct(n, total)]),
@@ -268,16 +344,23 @@ export default async function handler(req, res) {
       const colunas = (m, campos) => Object.fromEntries(Object.keys(campos)
         .map((c) => [c, m && m.mapa[c] >= 0 ? m.cabecalho[m.mapa[c]] : '(não encontrada)']));
       return res.status(200).json({
-        desligamentos: { total: dados.deslig.length, colunas: colunas(dados.mD, CAMPOS_DESLIG) },
+        desligamentos: {
+          pessoasNaPlanilha: dados.pessoas.length,
+          desligados: dados.deslig.length,
+          ativos: dados.pessoas.filter((p) => !p.desl).length,
+          comDataDeAdmissao: dados.pessoas.filter((p) => p.adm).length,
+          formatoDaAdmissao: dados.formatoAdm, // só o FORMATO (números viram 9), nunca a data real
+          colunas: colunas(dados.mD, CAMPOS_DESLIG),
+        },
         indicadores: dados.mI
           ? { linhas: dados.ind.length, colunas: colunas(dados.mI, CAMPOS_IND) }
-          : 'aba Indicadores não configurada (sem ela não há contratações nem % de turnover)',
+          : 'aba Indicadores não configurada (contratações e headcount calculados pelas datas de admissão/desligamento)',
       });
     }
 
     const filtro = { time: p.get('time') || '', ano: p.get('ano') || '', mes: p.get('mes') || '' };
-    const anos = [...new Set([...dados.deslig, ...dados.ind].map((r) => r.mes.slice(0, 4)))].sort().reverse();
-    const times = [...new Set(dados.deslig.map((r) => r.time))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const anos = [...new Set([...dados.deslig.map((r) => r.mes), ...dados.ind.map((r) => r.mes)].map((m) => m.slice(0, 4)))].sort().reverse();
+    const times = [...new Set(dados.pessoas.map((r) => r.time))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
     res.setHeader('Cache-Control', 'private, no-store');
     return res.status(200).json({
