@@ -137,25 +137,38 @@
       },
     });
 
-    // 2) % por estado (barras horizontais)
-    desenhar('tg-estado', {
+    // 2) Desligamentos por time, empilhado por tipo (barras horizontais)
+    const ORDEM_TIPO = ['Voluntário', 'Involuntário', 'Encerramento de contrato', 'Outro', 'Não informado'];
+    const tiposPresentes = ORDEM_TIPO.filter((t) => j.porTime.some((x) => x.tipos[t]));
+    desenhar('tg-time', {
       type: 'bar',
       plugins: DL,
       data: {
-        labels: j.porEstado.map((e) => e[0]),
-        datasets: [{ label: '% dos desligamentos', data: j.porEstado.map((e) => e[2]),
-          backgroundColor: '#400FF2', borderRadius: 3, maxBarThickness: 18 }],
+        labels: j.porTime.map((x) => x.time),
+        datasets: tiposPresentes.map((t) => ({
+          label: t,
+          data: j.porTime.map((x) => x.tipos[t] || 0),
+          backgroundColor: COR_TIPO[t] || '#C6C5C9',
+          borderRadius: 3, maxBarThickness: 22,
+        })),
       },
       options: {
         indexAxis: 'y', maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => ` ${fmt(c.raw, 2)}% (${j.porEstado[c.dataIndex][1]} desligamentos)` } },
-          datalabels: { anchor: 'end', align: 'end', color: '#3D4C6F', formatter: (v) => fmt(v, 1) + '%' },
+          legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } },
+          tooltip: { callbacks: {
+            label: (c) => ` ${c.dataset.label}: ${c.raw} de ${j.porTime[c.dataIndex].total}` +
+              ` (${fmt((100 * c.raw) / j.porTime[c.dataIndex].total, 0)}%)`,
+          } },
+          datalabels: {
+            color: (c) => (TEXTO_CLARO.has(c.dataset.backgroundColor) ? '#fff' : '#18233C'),
+            font: { weight: 500, size: 11 },
+            formatter: (v) => (v ? v : ''),
+          },
         },
         scales: {
-          x: { beginAtZero: true, suggestedMax: 100, ticks: { callback: (v) => v + '%' } },
-          y: { grid: { display: false } },
+          x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+          y: { stacked: true, grid: { display: false } },
         },
       },
     });
