@@ -15,8 +15,8 @@
 // ---------- PLANILHA (use a planilha BASE, sem dados pessoais) ----------
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
 const PLANILHA_TURNOVER = {
-  id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',                          // 👉 ID da planilha
-  gidDesligamentos: 'gid=123456789',  // 👉 gid da aba de desligamentos
+  id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',        // 👉 ID da planilha
+  gidDesligamentos: '548213907',                                     // 👉 gid da aba de desligamentos (0 = primeira aba)
   gidIndicadores: '',                                        // 👉 gid da aba Indicadores (contratações e headcount)
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
