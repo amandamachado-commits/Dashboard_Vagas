@@ -115,13 +115,13 @@ main[hidden] { display: none; }
 .t-grade {
   display: grid; gap: 16px;
   grid-template-columns: 1fr 1fr 1.2fr;
-  grid-template-areas: "tipo estado mes" "motivo motivo mes";
+  grid-template-areas: "tipo time mes" "motivo motivo mes";
 }
-.t-tipo { grid-area: tipo; } .t-estado { grid-area: estado; }
+.t-tipo { grid-area: tipo; } .t-time { grid-area: time; }
 .t-mes { grid-area: mes; } .t-motivo { grid-area: motivo; }
 .t-mes .grafico-alto { height: calc(100% - 36px); min-height: 560px; }
 @media (max-width: 1100px) {
   .kpis-5 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-  .t-grade { grid-template-columns: 1fr; grid-template-areas: "tipo" "estado" "mes" "motivo"; }
+  .t-grade { grid-template-columns: 1fr; grid-template-areas: "tipo" "time" "mes" "motivo"; }
   .t-mes .grafico-alto { min-height: 320px; }
 }

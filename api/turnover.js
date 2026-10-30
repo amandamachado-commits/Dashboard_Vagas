@@ -16,7 +16,7 @@
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
 const PLANILHA_TURNOVER = {
   id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',        // 👉 ID da planilha
-  gidDesligamentos: '548213907',                                     // 👉 gid da aba de desligamentos (0 = primeira aba)
+  gidDesligamentos: '0',                                     // 👉 gid da aba de desligamentos (0 = primeira aba)
   gidIndicadores: '',                                        // 👉 gid da aba Indicadores (contratações e headcount)
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
@@ -65,19 +65,47 @@ function parseCSV(texto) {
   return linhas;
 }
 
+// Entende datas em vários formatos e devolve "AAAA-MM-DD" (ou null):
+//   10/01/2026 · 10-01-2026 · 10.01.2026 · 2026-01-10 · 10/jan/2026 · 10 de janeiro de 2026
+//   jan 10, 2026 · 45667 (número de série do Google Sheets / Excel)
+const MESES_TXT = { JAN: 1, FEV: 2, FEB: 2, MAR: 3, ABR: 4, APR: 4, MAI: 5, MAY: 5, JUN: 6, JUL: 7,
+  AGO: 8, AUG: 8, SET: 9, SEP: 9, OUT: 10, OCT: 10, NOV: 11, DEZ: 12, DEC: 12 };
+function montarData(ano, mes, dia) {
+  ano = String(ano); if (ano.length === 2) ano = '20' + ano;
+  mes = Number(mes); dia = Number(dia);
+  if (!(mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31)) return null;
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
 function paraData(v) {
-  v = (v || '').trim();
+  v = String(v || '').trim();
   if (!v) return null;
-  let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-  if (!m) return null;
-  let [, a, b, ano] = m;
-  if (ano.length === 2) ano = '20' + ano;
-  let dia = a, mes = b;
-  if (+a <= 12 && +b > 12) { dia = b; mes = a; }
-  else if (+a <= 12 && +b <= 12 && process.env.DATE_ORDER === 'mdy') { dia = b; mes = a; }
-  return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+  let m;
+  // 2026-01-10 (ou 2026/01/10)
+  if ((m = v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) return montarData(m[1], m[2], m[3]);
+  // 10/01/2026 · 10-01-2026 · 10.01.2026
+  if ((m = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))) {
+    let [, a, b, ano] = m, dia = a, mes = b;
+    if (+a <= 12 && +b > 12) { dia = b; mes = a; }
+    else if (+a <= 12 && +b <= 12 && process.env.DATE_ORDER === 'mdy') { dia = b; mes = a; }
+    return montarData(ano, mes, dia);
+  }
+  // Número de série (Sheets/Excel): dias desde 30/12/1899
+  if (/^\d{5}(\.\d+)?$/.test(v)) {
+    const n = Math.floor(Number(v));
+    if (n > 20000 && n < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+      return d.toISOString().slice(0, 10);
+    }
+  }
+  // Mês escrito: "10/jan/2026", "10 de janeiro de 2026", "10-jan-26", "jan 10, 2026"
+  const t = normalizar(v).replace(/\./g, '');
+  if ((m = t.match(/^(\d{1,2})[\s\/-]*(?:DE\s+)?([A-Z]{3})[A-Z]*[\s\/-]*(?:DE\s+)?(\d{2,4})/))) {
+    if (MESES_TXT[m[2]]) return montarData(m[3], MESES_TXT[m[2]], m[1]);
+  }
+  if ((m = t.match(/^([A-Z]{3})[A-Z]*\s+(\d{1,2}),?\s+(\d{4})/))) {
+    if (MESES_TXT[m[1]]) return montarData(m[3], MESES_TXT[m[1]], m[2]);
+  }
+  return null;
 }
 
 // "01/2026", "jan/2026", "Janeiro 2026", "2026-01", "01/01/2026" → "2026-01"
@@ -166,9 +194,24 @@ async function lerTudo() {
   if (!mD) throw new Error('Não encontrei a coluna "Tipo do desligamento" na aba de desligamentos.');
   if (mD.mapa.data < 0) throw new Error('Não encontrei a coluna com a DATA DO DESLIGAMENTO (ex.: "DT DESLIGAMENTO").');
   const hoje = new Date();
+  // Contadores para o diagnóstico (sem nenhum dado pessoal)
+  const info = { linhasLidas: 0, semData: 0, dataNaoEntendida: 0, dataNoFuturo: 0, formatosNaoEntendidos: [] };
   const deslig = linhasD.slice(mD.iCab + 1).map((col) => {
-    const data = paraData(pegar(col, mD.mapa.data));
-    if (!data || new Date(data) > hoje) return null;
+    if (!col.some((c) => String(c).trim())) return null; // linha vazia
+    info.linhasLidas++;
+    const bruto = pegar(col, mD.mapa.data);
+    const data = paraData(bruto);
+    if (!bruto) { info.semData++; return null; }
+    if (!data) {
+      info.dataNaoEntendida++;
+      // guarda só o FORMATO (números viram 9): ex. "99/99/9999" — nunca a data real
+      const formato = bruto.replace(/\d/g, '9').slice(0, 30);
+      if (info.formatosNaoEntendidos.length < 5 && !info.formatosNaoEntendidos.includes(formato)) {
+        info.formatosNaoEntendidos.push(formato);
+      }
+      return null;
+    }
+    if (new Date(data) > hoje) { info.dataNoFuturo++; return null; }
     return {
       mes: data.slice(0, 7),
       time: pegar(col, mD.mapa.time) || 'Não informado',
@@ -195,7 +238,7 @@ async function lerTudo() {
     }
   }
 
-  cache = { quando: Date.now(), dados: { deslig, ind, mD, mI } };
+  cache = { quando: Date.now(), dados: { deslig, ind, mD, mI, info } };
   return cache.dados;
 }
 
@@ -270,7 +313,7 @@ export default async function handler(req, res) {
       const colunas = (m, campos) => Object.fromEntries(Object.keys(campos)
         .map((c) => [c, m && m.mapa[c] >= 0 ? m.cabecalho[m.mapa[c]] : '(não encontrada)']));
       return res.status(200).json({
-        desligamentos: { total: dados.deslig.length, colunas: colunas(dados.mD, CAMPOS_DESLIG) },
+        desligamentos: { total: dados.deslig.length, ...dados.info, colunas: colunas(dados.mD, CAMPOS_DESLIG) },
         indicadores: dados.mI
           ? { linhas: dados.ind.length, colunas: colunas(dados.mI, CAMPOS_IND) }
           : 'aba Indicadores não configurada (sem ela não há contratações nem % de turnover)',
@@ -287,7 +330,7 @@ export default async function handler(req, res) {
 
     res.setHeader('Cache-Control', 'private, no-store');
     return res.status(200).json({
-      versao: 'v3', // aparece no dashboard ao lado de "Atualizado em"
+      versao: 'v4', // aparece no dashboard ao lado de "Atualizado em"
       atualizadoEm: new Date(cache.quando).toISOString(),
       opcoes: { times, timesPorAno, anos, meses: NOMES_MES },
       ...calcular(dados, filtro),
