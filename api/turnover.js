@@ -14,8 +14,10 @@
 
 // ---------- PLANILHA (use a planilha BASE, sem dados pessoais) ----------
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
+// Não coloque o ID real aqui — use a variável de ambiente SHEET_ID_TURNOVER
+// (no .env local e em Settings → Environment Variables no Vercel).
 const PLANILHA_TURNOVER = {
-  id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',        // 👉 ID da planilha
+  id: 'COLE_AQUI_O_ID_DA_PLANILHA_DE_TURNOVER',               // 👉 ID da planilha (ou use SHEET_ID_TURNOVER)
   gidDesligamentos: '0',                                     // 👉 gid da aba com o quadro de pessoas (0 = primeira aba)
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
