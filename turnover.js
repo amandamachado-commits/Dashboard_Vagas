@@ -28,6 +28,28 @@
   let iniciado = false;
   const graficos = {};
 
+  // Times que não existem mais na empresa: somem só da LISTA do filtro.
+  // Os dados históricos continuam no banco e as pessoas continuam aparecendo
+  // normalmente nos gráficos/tabelas, com o nome do time antigo.
+  const TIMES_OCULTOS_NO_FILTRO = [
+    'Financeiro & Pagamentos',
+    'Desenvolvimento de Negócio',
+    'Desenvolvimento de Negócios',
+    'Educação',
+    'Novos Negócios',
+    'Operações e Risco',
+    'Operações e Riscos',
+    'Pagamentos',
+  ];
+  const normalizarTime = (s) => String(s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+    .toLowerCase()
+    .replace(/&/g, 'e')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/s\b/g, ''); // ignora singular/plural (negócio(s), risco(s)…)
+  const TIMES_OCULTOS_NORM = new Set(TIMES_OCULTOS_NO_FILTRO.map(normalizarTime));
+
   // ---------- abas ----------
   function mostrarAba(nome) {
     document.querySelectorAll('.aba').forEach((b) => {
@@ -78,7 +100,8 @@
       itens.forEach(([valor, texto]) => sel.add(new Option(texto, valor)));
       sel.addEventListener('change', () => carregar());
     };
-    preencher('#tf-time', opcoes.times.map((t) => [t, t]));
+    const timesVisiveis = opcoes.times.filter((t) => !TIMES_OCULTOS_NORM.has(normalizarTime(t)));
+    preencher('#tf-time', timesVisiveis.map((t) => [t, t]));
     preencher('#tf-ano', opcoes.anos.map((a) => [a, a]));
     preencher('#tf-mes', opcoes.meses.map((m, i) => [String(i + 1), m]));
   }
@@ -91,12 +114,12 @@
 
   function kpis(k) {
     const itens = [
-      ['Contratações', fmt(k.contratacoes), k.contratacoes == null ? 'cadastre a aba Indicadores' : ''],
+      ['Contratações', fmt(k.contratacoes), ''],
       ['Desligamentos', fmt(k.desligamentos), ''],
-      ['Turnover geral', fmtPct(k.turnoverGeral),
+      ['Turnover geral', fmt(k.turnoverGeral, 2),
         k.headcountMedio ? `headcount médio ${fmt(k.headcountMedio)}` : 'precisa de headcount'],
-      ['Retenção', fmtPct(k.retencao), '100% − turnover voluntário'],
-      ['Turnover voluntário', fmtPct(k.turnoverVoluntario), 'pedidos de desligamento'],
+      ['Retenção', fmt(k.retencao, 2), '100 − turnover voluntário'],
+      ['Turnover voluntário', fmt(k.turnoverVoluntario, 2), 'pedidos de desligamento'],
     ];
     const box = q('#t-kpis');
     box.replaceChildren();

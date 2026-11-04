@@ -287,7 +287,7 @@ function render() {
       `${L.filter((r) => r.status === 'Congelada').length} · ${L.filter((r) => r.status === 'Cancelada').length}`, ''],
     ['SLA médio', slas.length ? fmt(media(slas)) + ' dias' : '—',
       slas.length ? `${slas.length} vagas fechadas` : 'só vagas fechadas têm SLA', true],
-    ['Fechadas no prazo', prazo.pct == null ? '—' : fmt(prazo.pct) + '%', `${prazo.ok} de ${prazo.total}`, true],
+    ['Fechadas no prazo', prazo.pct == null ? '—' : fmt(prazo.pct), `${prazo.ok} de ${prazo.total}`, true],
     ['Tempo médio em aberto', emAberto.length ? fmt(media(emAberto)) + ' dias' : '—',
       emAberto.length ? `${emAberto.length} vagas em andamento` : 'nenhuma vaga em andamento', true],
   ]);

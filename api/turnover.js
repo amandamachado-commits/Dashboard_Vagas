@@ -16,32 +16,27 @@
 //   https://docs.google.com/spreadsheets/d/  ID  /edit#gid=  NÚMERO DA ABA
 const PLANILHA_TURNOVER = {
   id: '1OTxTvrVfbOcQV-lT0m_85DtboTI7cDwa_Q--jMfBTQM',        // 👉 ID da planilha
-  gidDesligamentos: '0',                                     // 👉 gid da aba de desligamentos (0 = primeira aba)
-  gidIndicadores: '',                                        // 👉 gid da aba Indicadores (contratações e headcount)
+  gidDesligamentos: '0',                                     // 👉 gid da aba com o quadro de pessoas (0 = primeira aba)
 };
 const vazio = (v) => !v || String(v).startsWith('COLE_AQUI');
 const SHEET_ID = process.env.SHEET_ID_TURNOVER || (vazio(PLANILHA_TURNOVER.id) ? '' : PLANILHA_TURNOVER.id);
 const GID_DESLIG = process.env.GID_DESLIGAMENTOS || (vazio(PLANILHA_TURNOVER.gidDesligamentos) ? '' : PLANILHA_TURNOVER.gidDesligamentos);
-const GID_IND = process.env.GID_INDICADORES || (vazio(PLANILHA_TURNOVER.gidIndicadores) ? '' : PLANILHA_TURNOVER.gidIndicadores);
 
 // LISTA BRANCA — únicas colunas lidas (nomes aceitos, sem acento, maiúsculo)
+// Contratações e headcount são calculados a partir de ADMISSÃO + DESLIGAMENTO
+// (cada linha é uma pessoa: data de admissão sempre preenchida, data de
+// desligamento só preenchida para quem já saiu).
 const CAMPOS_DESLIG = {
-  data:     ['DT DESLIGAMENTO', 'DT DE DESLIGAMENTO', 'DATA DESLIGAMENTO', 'DATA DE DESLIGAMENTO',
-             'DATA DO DESLIGAMENTO', 'DESLIGAMENTO', 'DT SAIDA', 'DT DE SAIDA', 'DATA DE SAIDA'],
-  time:     ['SETOR', 'TIME', 'AREA'],
-  tipo:     ['TIPO DO DESLIGAMENTO', 'TIPO DE DESLIGAMENTO', 'TIPO DESLIGAMENTO'],
-  motivo:   ['MOTIVO', 'MOTIVO DO DESLIGAMENTO', 'MOTIVO DESLIGAMENTO'],
-};
-const CAMPOS_IND = {
-  mes:           ['MES', 'MES/ANO', 'COMPETENCIA', 'DATA'],
-  time:          ['SETOR', 'TIME', 'AREA'],
-  contratacoes:  ['CONTRATACOES', 'ADMISSOES', 'CONTRATADOS'],
-  headcount:     ['HEADCOUNT', 'HC', 'ATIVOS', 'COLABORADORES'],
+  data:      ['DT DESLIGAMENTO', 'DT DE DESLIGAMENTO', 'DATA DESLIGAMENTO', 'DATA DE DESLIGAMENTO',
+              'DATA DO DESLIGAMENTO', 'DESLIGAMENTO', 'DT SAIDA', 'DT DE SAIDA', 'DATA DE SAIDA'],
+  admissao:  ['DATA DE ADMISSAO', 'DT ADMISSAO', 'DT DE ADMISSAO', 'DATA ADMISSAO', 'ADMISSAO'],
+  time:      ['SETOR', 'TIME', 'AREA'],
+  tipo:      ['TIPO DO DESLIGAMENTO', 'TIPO DE DESLIGAMENTO', 'TIPO DESLIGAMENTO'],
+  motivo:    ['MOTIVO', 'MOTIVO DO DESLIGAMENTO', 'MOTIVO DESLIGAMENTO'],
 };
 
 const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho',
   'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-const ABREV = NOMES_MES.map((m) => m.normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 3).toUpperCase());
 
 const normalizar = (s) =>
   String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -108,32 +103,6 @@ function paraData(v) {
   return null;
 }
 
-// "01/2026", "jan/2026", "Janeiro 2026", "2026-01", "01/01/2026" → "2026-01"
-function paraMes(v) {
-  const t = normalizar(v);
-  if (!t) return null;
-  const d = paraData(v);
-  if (d) return d.slice(0, 7);
-  let m = t.match(/^(\d{4})-(\d{1,2})$/);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}`;
-  m = t.match(/^(\d{1,2})\/(\d{4})$/);
-  if (m) return `${m[2]}-${m[1].padStart(2, '0')}`;
-  m = t.match(/^([A-Z]{3})[A-Z]*[\/\s.-]*(?:DE\s+)?(\d{2,4})$/);
-  if (m && ABREV.includes(m[1])) {
-    const ano = m[2].length === 2 ? '20' + m[2] : m[2];
-    return `${ano}-${String(ABREV.indexOf(m[1]) + 1).padStart(2, '0')}`;
-  }
-  return null;
-}
-
-function paraNumero(v) {
-  v = String(v || '').trim();
-  if (!v) return null;
-  if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 function padronizarTipo(s) {
   const n = normalizar(s);
   if (!n) return 'Não informado';
@@ -194,51 +163,43 @@ async function lerTudo() {
   if (!mD) throw new Error('Não encontrei a coluna "Tipo do desligamento" na aba de desligamentos.');
   if (mD.mapa.data < 0) throw new Error('Não encontrei a coluna com a DATA DO DESLIGAMENTO (ex.: "DT DESLIGAMENTO").');
   const hoje = new Date();
+  const hojeISO = hoje.toISOString().slice(0, 10);
   // Contadores para o diagnóstico (sem nenhum dado pessoal)
   const info = { linhasLidas: 0, semData: 0, dataNaoEntendida: 0, dataNoFuturo: 0, formatosNaoEntendidos: [] };
-  const deslig = linhasD.slice(mD.iCab + 1).map((col) => {
+  // Cada linha é uma pessoa: fica no array mesmo sem desligamento (pessoa ativa),
+  // pois a admissão dela conta para contratações e para o headcount.
+  const pessoas = linhasD.slice(mD.iCab + 1).map((col) => {
     if (!col.some((c) => String(c).trim())) return null; // linha vazia
     info.linhasLidas++;
-    const bruto = pegar(col, mD.mapa.data);
-    const data = paraData(bruto);
-    if (!bruto) { info.semData++; return null; }
-    if (!data) {
+
+    const brutoDeslig = pegar(col, mD.mapa.data);
+    let dataDeslig = paraData(brutoDeslig);
+    if (!brutoDeslig) {
+      info.semData++;
+    } else if (!dataDeslig) {
       info.dataNaoEntendida++;
       // guarda só o FORMATO (números viram 9): ex. "99/99/9999" — nunca a data real
-      const formato = bruto.replace(/\d/g, '9').slice(0, 30);
+      const formato = brutoDeslig.replace(/\d/g, '9').slice(0, 30);
       if (info.formatosNaoEntendidos.length < 5 && !info.formatosNaoEntendidos.includes(formato)) {
         info.formatosNaoEntendidos.push(formato);
       }
-      return null;
+    } else if (dataDeslig > hojeISO) {
+      info.dataNoFuturo++;
+      dataDeslig = null;
     }
-    if (new Date(data) > hoje) { info.dataNoFuturo++; return null; }
+
+    const dataAdm = paraData(pegar(col, mD.mapa.admissao));
     return {
-      mes: data.slice(0, 7),
+      mes: dataDeslig ? dataDeslig.slice(0, 7) : null,
+      desligamento: dataDeslig,
+      admissao: dataAdm,
       time: pegar(col, mD.mapa.time) || 'Não informado',
-      tipo: padronizarTipo(pegar(col, mD.mapa.tipo)),
-      motivo: categoria(pegar(col, mD.mapa.motivo)),
+      tipo: dataDeslig ? padronizarTipo(pegar(col, mD.mapa.tipo)) : null,
+      motivo: dataDeslig ? categoria(pegar(col, mD.mapa.motivo)) : null,
     };
   }).filter(Boolean);
 
-  let ind = [], mI = null;
-  if (GID_IND) {
-    const linhasI = await baixarCSV(GID_IND, 'indicadores');
-    mI = mapear(linhasI, CAMPOS_IND, 'mes');
-    if (mI) {
-      ind = linhasI.slice(mI.iCab + 1).map((col) => {
-        const mes = paraMes(pegar(col, mI.mapa.mes));
-        if (!mes) return null;
-        return {
-          mes,
-          time: pegar(col, mI.mapa.time),
-          contratacoes: paraNumero(pegar(col, mI.mapa.contratacoes)) ?? 0,
-          headcount: paraNumero(pegar(col, mI.mapa.headcount)),
-        };
-      }).filter(Boolean);
-    }
-  }
-
-  cache = { quando: Date.now(), dados: { deslig, ind, mD, mI, info } };
+  cache = { quando: Date.now(), dados: { pessoas, mD, info } };
   return cache.dados;
 }
 
@@ -250,31 +211,58 @@ const contar = (lista, campo) => {
 };
 const pct = (a, b) => (b ? Math.round((10000 * a) / b) / 100 : null);
 
-function calcular({ deslig, ind, mI }, { time, ano, mes }) {
-  const noPeriodo = (m) => (!ano || m.startsWith(ano)) && (!mes || Number(m.slice(5, 7)) === Number(mes));
-  const D = deslig.filter((r) => noPeriodo(r.mes) && (!time || r.time === time));
+// Headcount numa data: quem já tinha admissão e ainda não tinha saído (ou saiu depois).
+const headcountEm = (pessoas, dataISO) => pessoas
+  .filter((r) => r.admissao && r.admissao <= dataISO && (!r.desligamento || r.desligamento > dataISO)).length;
+const umDiaAntes = (iso) => {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
 
-  // Indicadores: se tiver coluna de time, filtra; se não tiver e há filtro de time, não dá para calcular
-  const indTemTime = mI && mI.mapa.time >= 0;
-  const usarInd = !(time && !indTemTime);
-  const I = usarInd ? ind.filter((r) => noPeriodo(r.mes) && (!time || r.time === time)) : [];
+function calcular({ pessoas }, { time, ano, mes }) {
+  const noPeriodo = (m) => m && (!ano || m.startsWith(ano)) && (!mes || Number(m.slice(5, 7)) === Number(mes));
+  const roster = pessoas.filter((r) => !time || r.time === time);
+  const D = roster.filter((r) => noPeriodo(r.mes));
 
-  const mesesI = [...new Set(I.map((r) => r.mes))];
-  const hcPorMes = mesesI.map((m) => I.filter((r) => r.mes === m && r.headcount != null)
-    .reduce((s, r) => s + r.headcount, 0)).filter((v) => v > 0);
-  const hcMedio = hcPorMes.length ? hcPorMes.reduce((a, b) => a + b, 0) / hcPorMes.length : null;
-  const contratacoes = usarInd && ind.length ? I.reduce((s, r) => s + r.contratacoes, 0) : null;
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  let inicioISO, fimISO;
+  if (ano && mes) {
+    const mm = String(Number(mes)).padStart(2, '0');
+    inicioISO = `${ano}-${mm}-01`;
+    fimISO = `${ano}-${mm}-${String(new Date(Number(ano), Number(mes), 0).getDate()).padStart(2, '0')}`;
+  } else if (ano) {
+    inicioISO = `${ano}-01-01`;
+    fimISO = `${ano}-12-31`;
+  } else {
+    const admissoes = roster.map((r) => r.admissao).filter(Boolean).sort();
+    inicioISO = admissoes[0] || hojeISO;
+    fimISO = hojeISO;
+  }
+  if (fimISO > hojeISO) fimISO = hojeISO;
+
+  // Headcount médio (e, por tabela, o % de turnover) só faz sentido dentro de um
+  // período limitado. Com "Todos" os anos juntos, contratações acumuladas de vários
+  // anos contra um headcount de 2 pontos dariam uma taxa sem sentido — por isso só
+  // calculamos quando um ano foi escolhido no filtro.
+  const hcInicio = ano ? headcountEm(roster, umDiaAntes(inicioISO)) : null;
+  const hcFim = ano ? headcountEm(roster, fimISO) : null;
+  const hcMedio = ano && (hcInicio + hcFim) > 0 ? (hcInicio + hcFim) / 2 : null;
+  const contratacoes = roster.filter((r) => r.admissao && r.admissao >= inicioISO && r.admissao <= fimISO).length;
 
   const vol = D.filter((r) => r.tipo === 'Voluntário').length;
-  const turnoverGeral = hcMedio && contratacoes != null ? pct((contratacoes + D.length) / 2, hcMedio) : null;
+  const turnoverGeral = hcMedio ? pct((contratacoes + D.length) / 2, hcMedio) : null;
   const turnoverVoluntario = hcMedio ? pct(vol, hcMedio) : null;
 
-  const mesAtual = new Date().toISOString().slice(0, 7);
-  const meses = [...new Set([...D.map((r) => r.mes), ...I.map((r) => r.mes)])].filter((m) => m <= mesAtual).sort();
+  const mesAtual = hojeISO.slice(0, 7);
+  const meses = [...new Set([
+    ...D.map((r) => r.mes),
+    ...roster.filter((r) => r.admissao).map((r) => r.admissao.slice(0, 7)),
+  ])].filter((m) => m <= mesAtual && noPeriodo(m)).sort();
   const porMes = meses.map((m) => ({
     mes: m,
     desligamentos: D.filter((r) => r.mes === m).length,
-    contratacoes: usarInd && ind.length ? I.filter((r) => r.mes === m).reduce((s, r) => s + r.contratacoes, 0) : null,
+    contratacoes: roster.filter((r) => r.admissao && r.admissao.slice(0, 7) === m).length,
   }));
 
   const total = D.length;
@@ -313,24 +301,28 @@ export default async function handler(req, res) {
       const colunas = (m, campos) => Object.fromEntries(Object.keys(campos)
         .map((c) => [c, m && m.mapa[c] >= 0 ? m.cabecalho[m.mapa[c]] : '(não encontrada)']));
       return res.status(200).json({
-        desligamentos: { total: dados.deslig.length, ...dados.info, colunas: colunas(dados.mD, CAMPOS_DESLIG) },
-        indicadores: dados.mI
-          ? { linhas: dados.ind.length, colunas: colunas(dados.mI, CAMPOS_IND) }
-          : 'aba Indicadores não configurada (sem ela não há contratações nem % de turnover)',
+        pessoas: {
+          total: dados.pessoas.length,
+          comAdmissao: dados.pessoas.filter((r) => r.admissao).length,
+          desligamentos: dados.pessoas.filter((r) => r.desligamento).length,
+          ...dados.info,
+          colunas: colunas(dados.mD, CAMPOS_DESLIG),
+        },
       });
     }
 
     const filtro = { time: p.get('time') || '', ano: p.get('ano') || '', mes: p.get('mes') || '' };
-    const anos = [...new Set([...dados.deslig, ...dados.ind].map((r) => r.mes.slice(0, 4)))].sort().reverse();
+    const todosMeses = dados.pessoas.flatMap((r) => [r.mes, r.admissao ? r.admissao.slice(0, 7) : null]).filter(Boolean);
+    const anos = [...new Set(todosMeses.map((m) => m.slice(0, 4)))].sort().reverse();
     const ordenar = (lista) => [...new Set(lista)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    const times = ordenar(dados.deslig.map((r) => r.time));
+    const times = ordenar(dados.pessoas.map((r) => r.time));
     // Times que têm desligamento em cada ano → { "2026": ["Vendas", ...], ... }
     const timesPorAno = Object.fromEntries(anos.map((a) => [a,
-      ordenar(dados.deslig.filter((r) => r.mes.startsWith(a)).map((r) => r.time))]));
+      ordenar(dados.pessoas.filter((r) => r.mes && r.mes.startsWith(a)).map((r) => r.time))]));
 
     res.setHeader('Cache-Control', 'private, no-store');
     return res.status(200).json({
-      versao: 'v4', // aparece no dashboard ao lado de "Atualizado em"
+      versao: 'v5', // aparece no dashboard ao lado de "Atualizado em"
       atualizadoEm: new Date(cache.quando).toISOString(),
       opcoes: { times, timesPorAno, anos, meses: NOMES_MES },
       ...calcular(dados, filtro),

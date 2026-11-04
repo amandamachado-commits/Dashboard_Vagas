@@ -5,43 +5,75 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Entrar · Controle de Vagas</title>
+  <link rel="icon" type="image/png" href="/assets/bemobi-icone.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@300..500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <style>
-    .tela-login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+    .tela-login {
+      min-height: 100vh; display: grid; place-items: center; padding: 16px;
+      background:
+        radial-gradient(640px 420px at 12% -10%, rgba(152,132,255,.35), transparent 60%),
+        radial-gradient(640px 420px at 110% 10%, rgba(64,15,242,.12), transparent 55%),
+        var(--fundo);
+    }
     .caixa-login {
-      width: 100%; max-width: 380px; background: #fff; border: 1px solid var(--borda);
-      border-radius: 16px; padding: 32px 28px;
+      width: 100%; max-width: 400px; background: #fff; border: 1px solid var(--borda);
+      border-radius: 20px; padding: 40px 36px;
+      box-shadow: 0 24px 60px -24px rgba(24, 35, 60, .22), 0 2px 8px rgba(24, 35, 60, .04);
     }
-    .caixa-login h1 { font-size: 26px; }
-    .caixa-login form { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; }
-    .caixa-login label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--texto2); }
+    .marca-login { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-bottom: 28px; text-align: center; }
+    .logo-bemobi { height: 28px; width: auto; display: block; }
+    .logo-bemobi[hidden] { display: none; }
+    .logo-fallback {
+      display: none; align-items: center; gap: 8px; font-size: 20px; font-weight: 500;
+      color: var(--azul); letter-spacing: -0.02em;
+    }
+    .logo-fallback .ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--lilas); }
+    .marca-login h1 { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; margin: 0; }
+    .marca-login .sub { margin-top: 0; font-size: 13px; }
+    .caixa-login form { display: flex; flex-direction: column; gap: 18px; }
+    .caixa-login label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--texto2); font-weight: 500; }
     .caixa-login input {
-      font: inherit; color: var(--texto); padding: 10px 12px;
-      border: 1px solid var(--borda); border-radius: 8px; background: #fff;
+      font: inherit; font-size: 15px; color: var(--texto); padding: 11px 14px;
+      border: 1px solid var(--borda); border-radius: 10px; background: #fff;
+      transition: border-color .15s, box-shadow .15s;
     }
-    .caixa-login input:focus { outline: 2px solid var(--azul); outline-offset: 1px; }
+    .caixa-login input::placeholder { color: #9AA6C0; }
+    .caixa-login input:focus {
+      outline: none; border-color: var(--azul);
+      box-shadow: 0 0 0 3px rgba(64, 15, 242, .14);
+    }
     .caixa-login button {
-      font: inherit; font-weight: 500; color: #fff; background: var(--azul);
-      border: 0; border-radius: 8px; padding: 12px; cursor: pointer; margin-top: 4px;
+      font: inherit; font-size: 15px; font-weight: 500; color: #fff; background: var(--azul);
+      border: 0; border-radius: 10px; padding: 13px; cursor: pointer; margin-top: 4px;
+      transition: background .15s, transform .05s;
     }
+    .caixa-login button:hover:not(:disabled) { background: #320AC2; }
+    .caixa-login button:active:not(:disabled) { transform: translateY(1px); }
     .caixa-login button:disabled { opacity: .6; cursor: wait; }
-    .erro-login { color: var(--erro); font-size: 14px; min-height: 1.2em; margin: 0; }
+    .erro-login { color: var(--erro); font-size: 13px; min-height: 1.2em; margin: 0; }
   </style>
 </head>
 <body>
   <main class="tela-login">
     <div class="caixa-login">
-      <h1>Controle de Vagas</h1>
-      <div class="sub">Agenda Edu · Gente e Gestão</div>
+      <div class="marca-login">
+        <img class="logo-bemobi" src="/assets/bemobi-logo.png" alt="Bemobi"
+             onerror="this.hidden = true; document.getElementById('logo-fallback').style.display = 'flex';">
+        <span class="logo-fallback" id="logo-fallback"><span class="ponto"></span>bemobi</span>
+        <div>
+          <h1>Controle de Vagas</h1>
+          <div class="sub">AgendaEdu · Gente e Gestão</div>
+        </div>
+      </div>
       <form id="form-login">
         <label>Usuário
-          <input id="usuario" name="usuario" autocomplete="username" required autofocus>
+          <input id="usuario" name="usuario" autocomplete="username" required autofocus placeholder="seu.usuario">
         </label>
         <label>Senha
-          <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+          <input id="senha" name="senha" type="password" autocomplete="current-password" required placeholder="••••••••">
         </label>
         <p class="erro-login" id="erro" role="alert"></p>
         <button type="submit" id="entrar">Entrar</button>
