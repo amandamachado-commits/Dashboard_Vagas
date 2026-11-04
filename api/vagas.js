@@ -46,6 +46,7 @@ const CAMPOS_LIBERADOS = {
 
 const CAMPOS_DATA = ['abertura', 'fechamento'];
 const CAMPOS_NUMERO = ['congelamento', 'prazo', 'sla'];
+const PRAZO_PADRAO = 30; // dias, usado quando a planilha não informa o prazo da vaga
 
 const normalizar = (s) =>
   String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -179,13 +180,15 @@ async function lerAba(aba) {
         else r[campo] = bruto;
       }
       r.status = padronizarStatus(r.status);
+      // PRAZO vazio na planilha? usa o prazo padrão da empresa (30 dias).
+      if (r.prazo == null) r.prazo = PRAZO_PADRAO;
       // SLA vazio? calcula: fechamento - abertura - dias congelada
       if (r.sla == null && r.abertura && r.fechamento) {
         r.sla = Math.max(0, diasEntre(r.abertura, r.fechamento) - (r.congelamento || 0));
       }
       r.prazoSituacao = situacaoPrazo(r.statusPrazo);
       // Vaga fechada: no prazo = SLA menor ou igual ao prazo (mesma regra da planilha)
-      if (r.status === 'Fechada' && r.sla != null && r.prazo) {
+      if (r.status === 'Fechada' && r.sla != null) {
         r.prazoSituacao = r.sla <= r.prazo ? 'Dentro do prazo' : 'Fora do prazo';
       }
       delete r.statusPrazo;
