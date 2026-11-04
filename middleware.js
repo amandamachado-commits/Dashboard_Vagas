@@ -7,7 +7,7 @@
 export const config = { matcher: '/:path*' };
 
 const LIVRES = ['/login.html', '/api/login', '/style.css', '/favicon.ico',
-  '/assets/bemobi-logo.png', '/assets/bemobi-icone.png'];
+  '/assets/bemobi-icone.png'];
 
 async function assinar(texto, chave) {
   const k = await crypto.subtle.importKey(

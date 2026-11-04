@@ -23,14 +23,7 @@
       border-radius: 20px; padding: 40px 36px;
       box-shadow: 0 24px 60px -24px rgba(24, 35, 60, .22), 0 2px 8px rgba(24, 35, 60, .04);
     }
-    .marca-login { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-bottom: 28px; text-align: center; }
-    .logo-bemobi { height: 28px; width: auto; display: block; }
-    .logo-bemobi[hidden] { display: none; }
-    .logo-fallback {
-      display: none; align-items: center; gap: 8px; font-size: 20px; font-weight: 500;
-      color: var(--azul); letter-spacing: -0.02em;
-    }
-    .logo-fallback .ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--lilas); }
+    .marca-login { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 28px; text-align: center; }
     .marca-login h1 { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; margin: 0; }
     .marca-login .sub { margin-top: 0; font-size: 13px; }
     .caixa-login form { display: flex; flex-direction: column; gap: 18px; }
@@ -60,13 +53,8 @@
   <main class="tela-login">
     <div class="caixa-login">
       <div class="marca-login">
-        <img class="logo-bemobi" src="/assets/bemobi-logo.png" alt="Bemobi"
-             onerror="this.hidden = true; document.getElementById('logo-fallback').style.display = 'flex';">
-        <span class="logo-fallback" id="logo-fallback"><span class="ponto"></span>bemobi</span>
-        <div>
-          <h1>Controle de Vagas</h1>
-          <div class="sub">AgendaEdu · Gente e Gestão</div>
-        </div>
+        <h1>Controle de Vagas</h1>
+        <div class="sub">AgendaEdu · Gente e Gestão</div>
       </div>
       <form id="form-login">
         <label>Usuário
