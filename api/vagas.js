@@ -17,10 +17,13 @@ const SHEET_ID = process.env.SHEET_ID;
 // Abas lidas. Se a aba tiver outro nome na planilha, ajuste aqui.
 // "gid" é opcional: é o número que aparece no fim do link da aba
 // (…#gid=123456). Quando preenchido, a leitura fica mais confiável.
+// "sheetId" é opcional: usado quando essa aba mora numa planilha diferente
+// das demais (ex.: SHEET_ID_2026 para o ano que migrou de base). Sem ele,
+// cai no SHEET_ID geral.
 const ABAS = [
-  { ano: 2024, nome: 'Controle de Vagas 2024', gid: process.env.GID_2024 },
-  { ano: 2025, nome: ' Controle de Vagas 2025', gid: process.env.GID_2025 },
-  { ano: 2026, nome: 'Controle de Vagas 2026', gid: process.env.GID_2026 },
+  { ano: 2024, nome: 'Controle de Vagas 2024', gid: process.env.GID_2024, sheetId: process.env.SHEET_ID_2024 },
+  { ano: 2025, nome: ' Controle de Vagas 2025', gid: process.env.GID_2025, sheetId: process.env.SHEET_ID_2025 },
+  { ano: 2026, nome: 'Controle de Vagas 2026', gid: process.env.GID_2026, sheetId: process.env.SHEET_ID_2026 },
 ];
 
 // LISTA BRANCA. "cabecalho" = nome da coluna na planilha (sem acento,
@@ -119,7 +122,7 @@ const diasEntre = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
 // Tenta 3 jeitos de ler a aba, do mais confiável para o menos.
 async function baixarCSV(aba) {
-  const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
+  const base = `https://docs.google.com/spreadsheets/d/${aba.sheetId || SHEET_ID}`;
   const gid = String(aba.gid || '').replace(/\D/g, ''); // aceita só números
   const tentativas = [];
   if (gid) {
